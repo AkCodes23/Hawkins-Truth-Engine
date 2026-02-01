@@ -33,117 +33,23 @@ logger = logging.getLogger(__name__)
 class CalibrationDataPoint(BaseModel):
     """Data point for training confidence calibration models."""
 
-    features: dict[str, float] = Field(
-        ..., description="Input features (linguistic_risk, etc.)"
-    )
-    heuristic_confidence: float = Field(
-        ..., ge=0.0, le=1.0, description="Original confidence score"
-    )
-    true_label: bool = Field(..., description="Ground truth label")
-    verdict: str = Field(..., description="Original verdict")
-    metadata: dict[str, Any] = Field(
-        default_factory=dict, description="Additional context"
-    )
-
-    @field_validator("features")
-    @classmethod
-    def validate_features(cls, v):
-        """Validate that features contain numeric values."""
-        for key, value in v.items():
-            if not isinstance(value, (int, float)):
-                raise ValueError(f"Feature '{key}' must be numeric, got {type(value)}")
-        return v
-
-    @field_validator("verdict")
-    @classmethod
-    def validate_verdict(cls, v):
-        """Validate that verdict is one of the expected values."""
-        valid_verdicts = {"Likely Real", "Suspicious", "Likely Fake"}
-        if v not in valid_verdicts:
-            raise ValueError(f"Verdict must be one of {valid_verdicts}, got '{v}'")
-        return v
-
-
-class CalibrationMetrics(BaseModel):
-    """Metrics for evaluating calibration quality."""
-
-    brier_score: float = Field(..., description="Brier score (lower is better)")
-    log_loss: float = Field(..., description="Log loss (lower is better)")
-    reliability_score: float = Field(..., description="Reliability diagram score")
-    n_samples: int = Field(..., description="Number of samples used for evaluation")
-    method: str = Field(..., description="Calibration method used")
-
-
-class ModelVersion(BaseModel):
-    """Model version information for tracking and rollback."""
-
-    version: str = Field(..., description="Version identifier (e.g., 'v1.0.0')")
-    created_at: datetime = Field(
-        default_factory=datetime.now, description="Creation timestamp"
-    )
-    description: str = Field(default="", description="Version description")
-    metrics: CalibrationMetrics | None = Field(None, description="Training metrics")
-    data_hash: str = Field(..., description="Hash of training data for reproducibility")
-    model_path: str = Field(..., description="Path to model file")
-    config: dict[str, Any] = Field(
-        default_factory=dict, description="Model configuration"
-    )
-
-
-class DataSplit(BaseModel):
-    """Information about train/validation data split."""
-
-    train_size: float = Field(
-        ..., ge=0.1, le=0.9, description="Training set proportion"
-    )
-    validation_size: float = Field(
-        ..., ge=0.1, le=0.9, description="Validation set proportion"
-    )
-    test_size: float = Field(
-        default=0.0, ge=0.0, le=0.8, description="Test set proportion"
-    )
-    stratify: bool = Field(
-        default=True, description="Whether to stratify split by labels"
-    )
-    random_seed: int = Field(default=42, description="Random seed for reproducibility")
-
-    @field_validator("train_size", "validation_size", "test_size")
-    @classmethod
-    def validate_split_sizes(cls, v, info):
-        """Validate that split sizes sum to approximately 1.0."""
-        return v
-
-    def model_post_init(self, __context):
-        """Validate that all split sizes sum to 1.0."""
-        total = self.train_size + self.validation_size + self.test_size
-        if not (0.99 <= total <= 1.01):  # Allow small floating point errors
-            raise ValueError(f"Split sizes must sum to 1.0, got {total}")
-
-
-class DataValidationResult(BaseModel):
-    """Result of data validation checks."""
-
-    is_valid: bool = Field(..., description="Whether data passed all validation checks")
-    total_samples: int = Field(..., description="Total number of data samples")
-    positive_samples: int = Field(..., description="Number of positive label samples")
-    negative_samples: int = Field(..., description="Number of negative label samples")
-    missing_features: list[str] = Field(
-        default_factory=list, description="Features with missing values"
-    )
-    invalid_samples: list[int] = Field(
-        default_factory=list, description="Indices of invalid samples"
-    )
-    warnings: list[str] = Field(default_factory=list, description="Validation warnings")
-    errors: list[str] = Field(default_factory=list, description="Validation errors")
-
-
-class ConfidenceCalibrator:
-    """Handles confidence calibration using Platt scaling or isotonic regression."""
-
     def __init__(
         self,
-        method: Literal["platt", "isotonic"] = "platt",
-        model_dir: str | Path | None = None,
+        features: dict[str, float] = Field(
+            default_factory=dict,
+            description="Input features for calibration (e.g., linguistic_risk, source_trust)",
+        ),
+        heuristic_confidence: float = Field(
+            ..., ge=0.0, le=1.0, description="Original confidence score"
+        ),
+        true_label: bool = Field(..., description="Ground truth label"),
+        verdict: str = Field(
+            ...,
+            description="Original verdict (e.g., 'Likely Real', 'Suspicious', 'Likely Fake')",
+        ),
+        metadata: dict[str, Any] = Field(
+            default_factory=dict, description="Additional context"
+        ),
     ):
         """
         Initialize the confidence calibrator.
