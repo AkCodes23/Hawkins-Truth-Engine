@@ -454,7 +454,7 @@ def create_relationship_edges(nodes: dict[str, GraphNode],
         attributions = _detect_claim_source_attribution(claim_item, document)
         
         for source_id, confidence in attributions:
-            if source_id in source_nodes:
+            if source_id in source_nodes or source_id in entity_nodes:
                 # Enhanced weight calculation based on evidence strength
                 base_weight = confidence
                 

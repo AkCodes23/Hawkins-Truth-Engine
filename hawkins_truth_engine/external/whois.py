@@ -8,24 +8,14 @@ from __future__ import annotations
 
 import socket
 import logging
+import asyncio
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
 
-async def whois_domain(domain: str) -> dict:
-    """Query WHOIS for domain information as RDAP fallback.
-    
-    Args:
-        domain: Domain name to query (e.g., 'example.com')
-        
-    Returns:
-        dict with structure {'request': {'url': domain}, 'data': {...}, 'success': bool}
-        
-    Note:
-        This is a best-effort implementation. WHOIS responses vary by registry
-        and may not always be parseable. Returns partial data on success.
-    """
+def _whois_domain_sync(domain: str) -> dict:
+    """Synchronous implementation of WHOIS lookup logic."""
     whois_server = "whois.iana.org"
     port = 43
     
@@ -97,3 +87,8 @@ async def whois_domain(domain: str) -> dict:
             "success": False,
             "error": str(e),
         }
+
+
+async def whois_domain(domain: str) -> dict:
+    """Async wrapper for WHOIS lookup using asyncio.to_thread."""
+    return await asyncio.to_thread(_whois_domain_sync, domain)

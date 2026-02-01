@@ -89,17 +89,20 @@ class Document(BaseModel):
 
 class LinguisticOutput(BaseModel):
     linguistic_risk_score: float = Field(ge=0.0, le=1.0)
+    confidence_score: float = Field(default=1.0, ge=0.0, le=1.0)
     signals: list[EvidenceItem]
     highlighted_phrases: list[str]
 
 
 class StatisticalOutput(BaseModel):
     statistical_risk_score: float = Field(ge=0.0, le=1.0)
+    confidence_score: float = Field(default=1.0, ge=0.0, le=1.0)
     evidence: list[EvidenceItem]
 
 
 class SourceIntelOutput(BaseModel):
     source_trust_score: float = Field(ge=0.0, le=1.0)
+    confidence_score: float = Field(default=1.0, ge=0.0, le=1.0)
     source_flags: list[EvidenceItem]
 
 

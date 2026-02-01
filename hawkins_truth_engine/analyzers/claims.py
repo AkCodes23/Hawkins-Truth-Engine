@@ -15,6 +15,14 @@ from ..external.ncbi import pubmed_efetch_abstract, pubmed_esearch, pubmed_esumm
 from ..external.tavily import tavily_search
 from ..schemas import ClaimItem, ClaimsOutput, Pointer
 from ..utils import find_spans
+from ..utils.source_quality import (
+    assess_citation_quality,
+    assess_source_authority,
+    calculate_source_diversity,
+    calculate_evidence_strength,
+    detect_contradictions,
+    extract_domain_from_url,
+)
 
 
 _MED_TERMS = {
@@ -107,13 +115,113 @@ def _claim_type(sentence: str) -> ClaimType:
     return "factual"
 
 
+async def _llm_veracity_fallback(claim: str) -> dict:
+    """Use LLM to estimate veracity when external APIs are unavailable.
+    
+    This is a fallback mechanism and results are marked with low confidence.
+    """
+    if not is_groq_available():
+        return {"support": "unverifiable", "reason": "llm_unavailable"}
+    
+    from ..external.groq import groq_chat_completion
+    
+    prompt = f"""Analyze the veracity of the following claim based on common knowledge as of late 2024.
+    Claim: "{claim}"
+    
+    Return a JSON object only with exactly these keys:
+    - support: "supported", "unsupported", or "unverifiable"
+    - reason: brief explanation
+    - confidence: 0.0 to 1.0
+    """
+    
+    try:
+        # Note: We use a very low temperature for factual checks
+        result = await groq_chat_completion(
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.0
+        )
+        
+        from ..external.groq import get_completion_text
+        text = get_completion_text(result)
+        
+        if not text:
+            return {"support": "unverifiable", "reason": "llm_no_response"}
+            
+        import json
+        # Extract JSON from response
+        match = re.search(r"\{.*\}", text, re.DOTALL)
+        if match:
+            data = json.loads(match.group(0))
+            # Reduce confidence because it's a model hallucination risk
+            data["confidence"] = data.get("confidence", 0.5) * 0.5 
+            return data
+            
+        return {"support": "unverifiable", "reason": "llm_parsing_failed"}
+    except Exception as e:
+        logger.warning(f"LLM veracity fallback failed: {e}")
+        return {"support": "unverifiable", "reason": "llm_exception"}
+
+
 def _snippet_relevance(snippet: str, claim: str) -> float:
-    # POC lexical overlap.
-    cs = {w for w in re.findall(r"[a-z0-9]{4,}", claim.lower())}
-    ss = {w for w in re.findall(r"[a-z0-9]{4,}", snippet.lower())}
-    if not cs or not ss:
+    """
+    Enhanced snippet relevance scoring using multiple factors.
+    """
+    # Filter out very short words
+    cs = {w for w in re.findall(r"\b[a-z0-9]{4,}\b", claim.lower())}
+    ss = {w for w in re.findall(r"\b[a-z0-9]{4,}\b", snippet.lower())}
+    
+    if not cs:
         return 0.0
-    return len(cs & ss) / len(cs)
+    
+    # Jaccard similarity (intersection over union)
+    intersection = len(cs & ss)
+    union = len(cs | ss)
+    jaccard = intersection / union if union > 0 else 0.0
+    
+    # Coverage (how much of the claim is covered by snippet)
+    coverage = intersection / len(cs) if cs else 0.0
+    
+    # Fuzzy match for paraphrasing
+    fuzzy_score = fuzz.partial_ratio(claim.lower(), snippet.lower()) / 100.0
+    
+    # Check for exact matches of long phrases (3+ words)
+    phrase_match = 0.0
+    claim_words = claim.lower().split()
+    if len(claim_words) >= 4:
+        for i in range(len(claim_words) - 3):
+            phrase = " ".join(claim_words[i:i+4])
+            if phrase in snippet.lower():
+                phrase_match = 0.8
+                break
+
+    # Important terms (numbers, medical terms)
+    important_patterns = [
+        r'\b\d+(?:\.\d+)?%?\b',  # Numbers and percentages
+        r'\b(cure|treat|vaccine|disease|study|research|evidence|death|cases|risk)\b',
+    ]
+    
+    claim_important = set()
+    snippet_important = set()
+    
+    for pattern in important_patterns:
+        claim_important.update(re.findall(pattern, claim.lower()))
+        snippet_important.update(re.findall(pattern, snippet.lower()))
+    
+    important_overlap = 0.0
+    if claim_important:
+        important_intersection = len(claim_important & snippet_important)
+        important_overlap = important_intersection / len(claim_important)
+    
+    # Combined relevance score
+    relevance = (
+        jaccard * 0.2 +
+        coverage * 0.2 +
+        fuzzy_score * 0.2 +
+        phrase_match * 0.2 +
+        important_overlap * 0.2
+    )
+    
+    return min(1.0, relevance)
 
 
 async def _pubmed_evidence_for_claim(claim: str) -> dict:
@@ -210,30 +318,42 @@ async def _gdelt_evidence_for_claim(claim: str) -> dict:
     """Fetch GDELT news corroboration for a claim."""
     out: dict = {"neighbors": [], "query_trace": [], "uncertainty_flags": []}
     try:
-        r = await gdelt_doc_search(query=claim, maxrecords=10)
+        r = await gdelt_doc_search(query=claim, maxrecords=10, retries=2)
         
         # Check if the API returned an error
         if "error" in r:
-            out["uncertainty_flags"].append("gdelt_unavailable")
-            out["query_trace"].append({"provider": "gdelt", "error": r["error"]})
+            error_type = r["error"]
+            # Only flag as unavailable for persistent errors, not temporary ones
+            if "timeout" in error_type or "connection_failed" in error_type or "http_error_5" in error_type:
+                out["uncertainty_flags"].append("gdelt_unavailable")
+            out["query_trace"].append({"provider": "gdelt", "error": error_type, "retried": True})
             return out
         
-        articles = (r.get("data") or {}).get("articles") or []
+        # Handle both possible response formats
+        data = r.get("data") or {}
+        articles = data.get("articles") or []
+        
+        # If no articles in 'articles', check if data itself is a list
+        if not articles and isinstance(data, list):
+            articles = data
+        
         out["query_trace"].append(
-            {"provider": "gdelt", "url": r["request"].get("url", ""), "count": len(articles)}
+            {"provider": "gdelt", "url": r.get("request", {}).get("url", ""), "count": len(articles)}
         )
+        
         for a in articles[:5]:
-            out["neighbors"].append(
-                {
-                    "url": a.get("url"),
-                    "title": a.get("title"),
-                    "domain": a.get("domain"),
-                    "seendate": a.get("seendate"),
-                }
-            )
+            if isinstance(a, dict):
+                out["neighbors"].append(
+                    {
+                        "url": a.get("url"),
+                        "title": a.get("title"),
+                        "domain": a.get("domain"),
+                        "seendate": a.get("seendate"),
+                    }
+                )
     except Exception as e:
         out["uncertainty_flags"].append("gdelt_unavailable")
-        out["query_trace"].append({"provider": "gdelt", "error": str(e)})
+        out["query_trace"].append({"provider": "gdelt", "error": str(e), "exception_type": type(e).__name__})
     return out
 
 
@@ -401,35 +521,29 @@ async def analyze_claims(doc) -> ClaimsOutput:
         if strong_claim_wo_attr:
             reasons.append("strong_claim_without_attribution")
 
-        # Online evidence
+        # Online evidence - collect from all sources
+        pubmed_citations = []
+        gdelt_citations = []
+        tavily_citations = []
+        
+        # Medical evidence (PubMed)
         if medical:
             pub = await _pubmed_evidence_for_claim(c)
-            citations.extend(pub.get("citations", []))
+            pubmed_citations = pub.get("citations", [])
+            citations.extend(pubmed_citations)
             query_trace.extend(pub.get("query_trace", []))
             qflags.extend(pub.get("quality_flags", []))
             uflags.extend(pub.get("uncertainty_flags", []))
-
-            # Very conservative classification: "supported" only if we have at least 2 citations with snippets.
-            snippetful = [x for x in citations if x.get("snippets")]
-            if len(snippetful) >= 2:
-                support = "supported"
-                reasons.append("multiple_pubmed_snippets")
-            elif citations:
-                support = "unverifiable"
-                reasons.append("pubmed_hits_but_no_clear_snippets")
-            else:
-                # If the claim is framed as strong medical efficacy/safety and lacks attribution,
-                # treat it as an unsupported assertion (not a claim of falsity).
-                support = "unsupported" if strong_claim_wo_attr else "unverifiable"
-                reasons.append("no_pubmed_hits")
+            # Mark PubMed citations with provider
+            for cit in pubmed_citations:
+                cit["provider"] = "pubmed"
 
         # News corroboration (GDELT) as a general (non-medical) corroboration hint.
         gd = await _gdelt_evidence_for_claim(c)
         if gd.get("neighbors"):
             query_trace.extend(gd.get("query_trace", []))
-            citations.extend(
-                [{**n, "provider": "gdelt"} for n in gd.get("neighbors", [])]
-            )
+            gdelt_citations = [{**n, "provider": "gdelt"} for n in gd.get("neighbors", [])]
+            citations.extend(gdelt_citations)
             reasons.append("related_news_coverage_exists")
         if gd.get("uncertainty_flags"):
             uflags.extend(gd.get("uncertainty_flags", []))
@@ -438,9 +552,8 @@ async def analyze_claims(doc) -> ClaimsOutput:
         tv = await _tavily_evidence_for_claim(c)
         if tv.get("neighbors"):
             query_trace.extend(tv.get("query_trace", []))
-            citations.extend(
-                [{**n, "provider": "tavily"} for n in tv.get("neighbors", [])]
-            )
+            tavily_citations = [{**n, "provider": "tavily"} for n in tv.get("neighbors", [])]
+            citations.extend(tavily_citations)
             reasons.append("related_web_results_exist")
         if tv.get("uncertainty_flags"):
             uflags.extend(tv.get("uncertainty_flags", []))
@@ -470,11 +583,224 @@ async def analyze_claims(doc) -> ClaimsOutput:
             for qf in quality_flags_to_add:
                 if qf not in qflags:
                     qflags.append(qf)
+        else:
+            # ENHANCED CROSS-REFERENCING LOGIC WITH EVIDENCE STRENGTH ANALYSIS
+            # Assess source quality and authority for all citations
+            quality_assessments = []
+            reputable_count = 0
+            questionable_count = 0
+            high_authority_count = 0
+            
+            for citation in citations:
+                assessment = assess_citation_quality(citation)
+                authority = assess_source_authority(citation)
+                quality_assessments.append(assessment)
+                citation["quality_assessment"] = assessment
+                citation["authority_score"] = authority
+                
+                if assessment["reputation_tier"] == "reputable":
+                    reputable_count += 1
+                elif assessment["reputation_tier"] == "questionable":
+                    questionable_count += 1
+                
+                if authority >= 0.8:  # High authority (peer-reviewed, .gov, .edu, reputable news)
+                    high_authority_count += 1
+            
+            # Calculate comprehensive evidence strength
+            evidence_strength = calculate_evidence_strength(citations, c, medical)
+            citation["evidence_strength"] = evidence_strength
+            
+            # Detect contradictions
+            contradictions = detect_contradictions(citations, c)
+            if contradictions["contradiction_score"] > 0.3:
+                uflags.append("potential_contradictions_detected")
+                reasons.append(f"contradicting_sources_found_{contradictions['contradicting_count']}")
+            
+            # Calculate source diversity
+            diversity_metrics = calculate_source_diversity(citations)
+            if diversity_metrics["diversity_score"] > 0:
+                qflags.append(f"source_diversity_score_{diversity_metrics['diversity_score']:.2f}")
+            
+            # Multi-source agreement analysis
+            providers_found = set()
+            if pubmed_citations:
+                providers_found.add("pubmed")
+            if gdelt_citations:
+                providers_found.add("gdelt")
+            if tavily_citations:
+                providers_found.add("tavily")
+            
+            multi_provider_agreement = len(providers_found) >= 2
+            high_diversity = diversity_metrics["diversity_score"] >= 0.6
+            
+            # Enhanced support classification using evidence strength
+            strength_score = evidence_strength["strength_score"]
+            strength_tier = evidence_strength["strength_tier"]
+            
+            # Count high-quality supporting evidence with improved snippet relevance
+            snippetful = []
+            high_quality_snippetful = []
+            high_authority_snippetful = []
+            
+            for citation in citations:
+                snippets = citation.get("snippets", [])
+                if snippets:
+                    # Calculate relevance for each snippet
+                    relevant_snippets = [
+                        s for s in snippets 
+                        if _snippet_relevance(s, c) >= 0.25
+                    ]
+                    if relevant_snippets:
+                        snippetful.append(citation)
+                        # Check quality and authority
+                        quality_tier = citation.get("quality_assessment", {}).get("reputation_tier", "neutral")
+                        authority = citation.get("authority_score", 0.0)
+                        
+                        if quality_tier == "reputable":
+                            high_quality_snippetful.append(citation)
+                        if authority >= 0.8:
+                            high_authority_snippetful.append(citation)
+            
+            # SUPPORTED: Use evidence strength as primary indicator
+            if strength_tier in ["very_strong", "strong"]:
+                support = "supported"
+                reasons.append(f"evidence_strength_{strength_tier}")
+                
+                # Add specific reasons
+                if len(high_authority_snippetful) >= 2:
+                    reasons.append("multiple_high_authority_sources_with_snippets")
+                elif len(high_quality_snippetful) >= 2:
+                    reasons.append("multiple_reputable_sources_with_snippets")
+                elif len(snippetful) >= 2:
+                    reasons.append("multiple_sources_with_snippets")
+                
+                if multi_provider_agreement:
+                    reasons.append("cross_provider_validation")
+                if high_diversity:
+                    reasons.append("diverse_source_agreement")
+                if high_authority_count >= 1:
+                    reasons.append("high_authority_sources_present")
+                    
+            elif strength_tier == "moderate":
+                # Moderate evidence - check for additional factors
+                if len(snippetful) >= 2 and reputable_count >= 1:
+                    support = "supported"
+                    reasons.append("moderate_evidence_multiple_sources")
+                    if multi_provider_agreement:
+                        reasons.append("cross_provider_validation")
+                elif citations and multi_provider_agreement and reputable_count >= 1:
+                    support = "supported"
+                    reasons.append("moderate_evidence_cross_validated")
+                else:
+                    support = "unverifiable"
+                    reasons.append("moderate_evidence_insufficient_validation")
+                    
+            elif citations:
+                # UNVERIFIABLE: Some evidence but weak
+                support = "unverifiable"
+                if snippetful:
+                    reasons.append("sources_found_but_insufficient_snippets")
+                elif contradictions["contradiction_score"] > 0.3:
+                    support = "contested"
+                    reasons.append("contradicting_evidence_found")
+                else:
+                    reasons.append("sources_found_but_no_relevant_snippets")
+            else:
+                # UNSUPPORTED: No evidence found, especially for strong claims
+                if strong_claim_wo_attr:
+                    support = "unsupported"
+                    reasons.append("strong_claim_no_attribution_no_evidence")
+                else:
+                    support = "unverifiable"
+                    reasons.append("no_external_evidence_found")
+            
+            # Handle contradictions - downgrade support if significant contradictions
+            if contradictions["contradiction_score"] > 0.5:
+                if support == "supported":
+                    support = "contested"
+                    reasons.append("support_downgraded_due_to_contradictions")
+                elif support != "contested":
+                    support = "unverifiable"
+                    reasons.append("contradicting_evidence_detected")
+            
+            # Flag questionable sources
+            if questionable_count > 0:
+                qflags.append("questionable_sources_present")
+                if questionable_count >= reputable_count:
+                    reasons.append("more_questionable_than_reputable_sources")
+                    # Downgrade support if questionable sources dominate
+                    if support == "supported" and reputable_count < 2:
+                        support = "unverifiable"
+                        reasons.append("support_downgraded_due_to_questionable_sources")
+            
+            # Medical claims require stricter validation but allow high-authority news
+            if medical and support == "supported":
+                # Check for academic/peer-reviewed sources
+                has_academic = high_authority_count >= 1 and any(
+                    cit.get("provider") == "pubmed" or 
+                    any(pt in str(cit.get("pubtypes", "")).lower() for pt in ["journal article", "clinical trial"])
+                    for cit in citations
+                )
+                
+                # Check for high-authority news outlets if no academic sources
+                has_high_auth_news = any(
+                    cit.get("authority_score", 0.0) >= 0.8 and cit.get("provider") != "pubmed"
+                    for cit in citations
+                )
+                
+                if not has_academic and has_high_auth_news:
+                    # Allow high-authority news but with a warning/lower confidence
+                    reasons.append("supported_by_high_authority_news_only")
+                    # Note: We keep support="supported" but reasoning engine will see the reason
+                elif not has_academic and not has_high_auth_news:
+                    support = "unverifiable"
+                    reasons.append("medical_claim_requires_authoritative_sources")
+                elif len(snippetful) < 1:
+                    # Medical claims MUST have at least one snippet
+                    support = "unverifiable"
+                    reasons.append("medical_claim_requires_supporting_snippets")
+
+        # LLM Fallback veracity check if external APIs were unavailable or inconclusive
+        # AND it's a verifiable claim
+        is_verifiable = True
+        if c in llm_claim_metadata:
+            is_verifiable = llm_claim_metadata[c].get("verifiable", True)
+            
+        if support == "unverifiable" and is_verifiable and is_groq_available():
+            llm_fallback = await _llm_veracity_fallback(c)
+            if llm_fallback.get("support") in ["supported", "unsupported"]:
+                # We don't fully trust the LLM, so we use a "likely" verdict
+                # and don't change the official support status to "supported"
+                # instead, we add it to reasons and flags
+                reasons.append(f"llm_fallback_indicates_{llm_fallback['support']}")
+                uflags.append(f"llm_veracity_estimate_{llm_fallback['support']}")
+                if "llm_fallback_used" not in query_trace:
+                    query_trace.append({
+                        "provider": "llm_fallback",
+                        "estimated_support": llm_fallback["support"],
+                        "confidence": llm_fallback.get("confidence", 0.0),
+                        "reason": llm_fallback.get("reason", "")
+                    })
+            
+            # Add quality flags based on assessments
+            if reputable_count >= 2:
+                qflags.append("multiple_reputable_sources")
+            if high_authority_count >= 1:
+                qflags.append("high_authority_sources")
+            if high_diversity:
+                qflags.append("high_source_diversity")
+            if multi_provider_agreement:
+                qflags.append("cross_provider_validation")
+            if strength_tier in ["very_strong", "strong"]:
+                qflags.append(f"evidence_strength_{strength_tier}")
 
         if support == "supported":
             supported += 1
         elif support == "unsupported":
             unsupported += 1
+        elif support == "contested":
+            # Contested claims are counted separately but also affect unverifiable
+            unverifiable += 1  # Count as unverifiable for backward compatibility
         else:
             unverifiable += 1
 
@@ -493,10 +819,14 @@ async def analyze_claims(doc) -> ClaimsOutput:
             )
         )
 
+    # Count contested claims separately
+    contested = sum(1 for c in claim_items if c.support == "contested")
+    
     return ClaimsOutput(
         claims={
             "supported": supported,
             "unsupported": unsupported,
+            "contested": contested,
             "unverifiable": unverifiable,
         },
         claim_items=claim_items,

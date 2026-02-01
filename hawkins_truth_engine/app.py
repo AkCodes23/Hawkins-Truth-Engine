@@ -172,10 +172,20 @@ async def analyze(request: Request, req: Annotated[AnalyzeRequest, Body()]) -> A
         raise HTTPException(status_code=422, detail=str(e))
     
     doc = await build_document(req.input_type, req.content)
+    
+    # Run independent analysis tasks in parallel
+    # Note: analyze_linguistic and analyze_statistical are synchronous for now.
+    # We run the async tasks concurrently.
+    source_task = analyze_source(doc)
+    claims_task = analyze_claims(doc)
+    
+    # Gather async results
+    source, claims = await asyncio.gather(source_task, claims_task)
+    
+    # Run sync analyzers
     linguistic = analyze_linguistic(doc)
     statistical = analyze_statistical(doc)
-    source = await analyze_source(doc)
-    claims = await analyze_claims(doc)
+    
     aggregation = aggregate(linguistic, statistical, source, claims)
     explanation = generate_explanation(
         doc, linguistic, statistical, source, claims, aggregation

@@ -25,6 +25,25 @@ from contextlib import contextmanager
 
 
 # =============================================================================
+# Pre-flight Import Check
+# =============================================================================
+
+def test_app_can_be_imported():
+    """Verify that the application module can be imported without errors.
+
+    This test runs first to catch any module-level import errors before
+    attempting to spawn subprocess servers, which would hide the actual
+    import error message.
+    """
+    try:
+        from hawkins_truth_engine import app
+        assert hasattr(app, 'app'), "FastAPI app instance not found"
+    except Exception as e:
+        import traceback
+        pytest.fail(f"Failed to import hawkins_truth_engine.app: {type(e).__name__}: {e}\n{traceback.format_exc()}")
+
+
+# =============================================================================
 # Test Server Management
 # =============================================================================
 
@@ -38,27 +57,38 @@ def find_free_port():
 
 
 @contextmanager
-def server_context(port: int, timeout: int = 15):
+def server_context(port: int, timeout: int = 30):
     """Context manager that starts and stops the test server.
 
     Args:
         port: Port to run the server on
-        timeout: Max seconds to wait for server startup
+        timeout: Max seconds to wait for server startup (default: 30s for slower machines)
     """
     # Start the server process
     env = os.environ.copy()
     # Set shorter timeouts for external APIs during testing
     env["HTE_HTTP_TIMEOUT_SECS"] = "15"
+
+    # Get the project root directory
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+    # Ensure Python path includes project root
+    python_path = env.get("PYTHONPATH", "")
+    if python_path:
+        env["PYTHONPATH"] = f"{project_root}{os.pathsep}{python_path}"
+    else:
+        env["PYTHONPATH"] = project_root
+
     process = subprocess.Popen(
         [sys.executable, "-m", "uvicorn",
          "hawkins_truth_engine.app:app",
          "--host", "127.0.0.1",
          "--port", str(port),
-         "--log-level", "warning"],
+         "--log-level", "info"],  # Use info level to capture more details
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         env=env,
-        cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        cwd=project_root
     )
 
     # Wait for server to be ready
@@ -76,9 +106,24 @@ def server_context(port: int, timeout: int = 15):
             time.sleep(0.3)
 
     if not server_ready:
+        # Capture any output from the server for debugging
         process.terminate()
-        process.wait()
-        pytest.fail("Server failed to start within timeout")
+        try:
+            stdout, stderr = process.communicate(timeout=2)
+            stdout_text = stdout.decode('utf-8', errors='replace') if stdout else ""
+            stderr_text = stderr.decode('utf-8', errors='replace') if stderr else ""
+            error_details = ""
+            if stdout_text.strip():
+                error_details += f"\nServer stdout:\n{stdout_text[:2000]}"
+            if stderr_text.strip():
+                error_details += f"\nServer stderr:\n{stderr_text[:2000]}"
+            if not error_details:
+                error_details = "\nNo output captured from server."
+            pytest.fail(f"Server failed to start within {timeout}s on port {port}{error_details}")
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
+            pytest.fail(f"Server failed to start within {timeout}s and couldn't capture output")
 
     try:
         yield base_url
@@ -262,6 +307,107 @@ class TestInputValidation:
 
         # Should reject invalid URL
         assert response.status_code == 422
+
+    def test_analyze_url_type_rejects_missing_scheme(self, server):
+        """Test that URL without http/https scheme is rejected."""
+        response = requests.post(
+            f"{server}/analyze",
+            json={
+                "input_type": "url",
+                "content": "www.example.com"
+            }
+        )
+
+        assert response.status_code == 422
+
+    def test_analyze_url_type_rejects_non_http_scheme(self, server):
+        """Test that non-http URLs are rejected."""
+        response = requests.post(
+            f"{server}/analyze",
+            json={
+                "input_type": "url",
+                "content": "ftp://example.com/file.txt"
+            }
+        )
+
+        assert response.status_code == 422
+
+
+# =============================================================================
+# URL Input Tests (SLOW - require network)
+# =============================================================================
+
+
+@pytest.mark.slow
+class TestUrlInput:
+    """Tests for URL input type analysis."""
+
+    def test_analyze_valid_url_returns_response(self, server):
+        """Test analysis of a valid URL returns proper response structure."""
+        # Use a well-known, stable URL for testing
+        response = requests.post(
+            f"{server}/analyze",
+            json={
+                "input_type": "url",
+                "content": "https://www.example.com",
+                "include_graphs": False
+            },
+            timeout=300
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Check response structure
+        assert "document" in data
+        assert data["document"]["input_type"] == "url"
+        assert data["document"]["url"] == "https://www.example.com"
+        assert "domain" in data["document"]
+        assert data["document"]["domain"] == "example.com"
+
+        # Should have aggregation even if content is minimal
+        assert "aggregation" in data
+        assert "verdict" in data["aggregation"]
+
+    def test_analyze_url_handles_unreachable_host(self, server):
+        """Test that unreachable URLs are handled gracefully."""
+        response = requests.post(
+            f"{server}/analyze",
+            json={
+                "input_type": "url",
+                "content": "https://this-domain-definitely-does-not-exist-12345.com",
+                "include_graphs": False
+            },
+            timeout=60
+        )
+
+        # Should return 200 with graceful degradation, not 500
+        assert response.status_code == 200
+        data = response.json()
+
+        # Should have preprocessing flags indicating fetch error
+        assert "document" in data
+        assert "preprocessing_flags" in data["document"]
+        assert any("fetch_error" in flag for flag in data["document"]["preprocessing_flags"])
+
+    def test_analyze_url_extracts_domain(self, server):
+        """Test that domain is correctly extracted from URL."""
+        response = requests.post(
+            f"{server}/analyze",
+            json={
+                "input_type": "url",
+                "content": "https://news.ycombinator.com/item?id=12345",
+                "include_graphs": False
+            },
+            timeout=300
+        )
+
+        # May succeed or fail depending on network, but should not error
+        assert response.status_code == 200
+        data = response.json()
+
+        # Domain extraction should work regardless of fetch success
+        assert data["document"]["domain"] == "news.ycombinator.com"
 
 
 # =============================================================================
