@@ -30,7 +30,6 @@ async def whois_domain(domain: str) -> dict:
     port = 43
     
     try:
-        # WHOIS queries use TCP port 43
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(10)
         
@@ -50,5 +49,51 @@ async def whois_domain(domain: str) -> dict:
         
         sock.close()
         
-        response_text = response.decode("utf-8", errors="ignore").lower()\n        
-        # Try to extract creation date from WHOIS response\n        # Common patterns: "created:", "creation date:", "created on:"\n        creation_date = None\n        for line in response_text.split("\n"):\n            if any(pattern in line for pattern in ["created:", "creation date:", "registered:"]):\n                try:\n                    # Simple extraction - format varies by registry\n                    date_part = line.split(":", 1)[1].strip()\n                    # Try parsing common formats\n                    for fmt in [\"%Y-%m-%d\", \"%Y-%m-%d %H:%M:%S\", \"%d-%b-%Y\", \"%b %d %Y\"]:\n                        try:\n                            creation_date = datetime.strptime(date_part[:10], fmt[:10])\n                            break\n                        except ValueError:\n                            continue\n                    if creation_date:\n                        break\n                except (IndexError, ValueError):\n                    continue\n        \n        age_days = None\n        if creation_date:\n            age_days = max(0, (datetime.now() - creation_date).days)\n            logger.debug(f\"WHOIS lookup for {domain}: created {creation_date}, age ~{age_days} days\")\n        \n        return {\n            \"request\": {\"url\": domain},\n            \"data\": {\n                \"creation_date\": creation_date.isoformat() if creation_date else None,\n                \"age_days\": age_days,\n            },\n            \"success\": creation_date is not None,\n        }\n        \n    except socket.timeout:\n        logger.warning(f\"WHOIS query timeout for {domain}\")\n        return {\n            \"request\": {\"url\": domain},\n            \"data\": {},\n            \"success\": False,\n            \"error\": \"WHOIS query timeout\",\n        }\n    except Exception as e:\n        logger.warning(f\"WHOIS lookup failed for {domain}: {type(e).__name__}: {str(e)}\")\n        return {\n            \"request\": {\"url\": domain},\n            \"data\": {},\n            \"success\": False,\n            \"error\": str(e),\n        }
+        response_text = response.decode("utf-8", errors="ignore").lower()
+        
+        creation_date = None
+        for line in response_text.split("\n"):
+            if any(pattern in line for pattern in ["created:", "creation date:", "registered:"]):
+                try:
+                    date_part = line.split(":", 1)[1].strip()
+                    for fmt in ["%Y-%m-%d", "%Y-%m-%d %H:%M:%S", "%d-%b-%Y", "%b %d %Y"]:
+                        try:
+                            creation_date = datetime.strptime(date_part[:10], fmt[:10])
+                            break
+                        except ValueError:
+                            continue
+                    if creation_date:
+                        break
+                except (IndexError, ValueError):
+                    continue
+        
+        age_days = None
+        if creation_date:
+            age_days = max(0, (datetime.now() - creation_date).days)
+            logger.debug(f"WHOIS lookup for {domain}: created {creation_date}, age ~{age_days} days")
+        
+        return {
+            "request": {"url": domain},
+            "data": {
+                "creation_date": creation_date.isoformat() if creation_date else None,
+                "age_days": age_days,
+            },
+            "success": creation_date is not None,
+        }
+        
+    except socket.timeout:
+        logger.warning(f"WHOIS query timeout for {domain}")
+        return {
+            "request": {"url": domain},
+            "data": {},
+            "success": False,
+            "error": "WHOIS query timeout",
+        }
+    except Exception as e:
+        logger.warning(f"WHOIS lookup failed for {domain}: {type(e).__name__}: {str(e)}")
+        return {
+            "request": {"url": domain},
+            "data": {},
+            "success": False,
+            "error": str(e),
+        }

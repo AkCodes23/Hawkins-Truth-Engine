@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+import logging
 import re
 from typing import Literal
 
+from rapidfuzz import fuzz
+
 from ..config import PUBMED_MAX_ABSTRACTS, TAVILY_API_KEY
+
+logger = logging.getLogger(__name__)
 from ..external.gdelt import gdelt_doc_search
 from ..external.ncbi import pubmed_efetch_abstract, pubmed_esearch, pubmed_esummary
 from ..external.tavily import tavily_search
@@ -200,6 +205,42 @@ async def _tavily_evidence_for_claim(claim: str) -> dict:
     return out
 
 
+def _deduplicate_claims(candidates: list[str], threshold: float = 0.85) -> list[str]:
+    """Remove duplicate or near-duplicate claims from candidates.
+    
+    Uses fuzzy string matching to identify and remove duplicate claims
+    that are extremely similar. Keeps only the first occurrence.
+    
+    Args:
+        candidates: List of claim candidate strings
+        threshold: Similarity threshold (0-1) for considering claims duplicates
+        
+    Returns:
+        Deduplicated list of claims
+    """
+    if not candidates:
+        return candidates
+    
+    deduped = []
+    seen_indices = set()
+    
+    for i, claim in enumerate(candidates):
+        if i in seen_indices:
+            continue
+        
+        deduped.append(claim)
+        
+        # Mark similar claims as duplicates
+        for j in range(i + 1, len(candidates)):
+            if j not in seen_indices:
+                similarity = fuzz.ratio(claim.lower(), candidates[j].lower()) / 100.0
+                if similarity >= threshold:
+                    logger.debug(f"Deduplicating claim (similarity={similarity:.2f}): '{candidates[j][:50]}...'")
+                    seen_indices.add(j)
+    
+    return deduped
+
+
 async def analyze_claims(doc) -> ClaimsOutput:
     triggers = _medical_topic_triggers(doc.display_text)
     medical = bool(triggers)
@@ -207,6 +248,8 @@ async def analyze_claims(doc) -> ClaimsOutput:
     uncertainty_flags: list[str] = []
 
     candidates = _claim_candidates([s.text for s in doc.sentences])
+    # Deduplicate claims before processing
+    candidates = _deduplicate_claims(candidates, threshold=0.85)
     claim_items: list[ClaimItem] = []
     supported = 0
     unsupported = 0
