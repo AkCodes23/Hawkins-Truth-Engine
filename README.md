@@ -872,6 +872,21 @@ class AnalysisResponse(BaseModel):
 
 ---
 
+### Tavily Search (Optional)
+
+**Purpose**: General web corroboration when GDELT is sparse or for non-news sources
+
+**Endpoint**: `https://api.tavily.com/search`
+
+**Configuration**:
+- `HTE_TAVILY_API_KEY` (optional) — if not set, Tavily is skipped
+- `HTE_TAVILY_MAX_RESULTS` (optional) — max results per query
+- `HTE_TAVILY_SEARCH_DEPTH` (optional) — `basic` or `advanced`
+
+**Failure Handling**: Adds `tavily_unavailable` uncertainty flag
+
+---
+
 ## Configuration & Environment Variables
 
 ### Required/Optional Variables
@@ -886,6 +901,9 @@ class AnalysisResponse(BaseModel):
 | `HTE_NCBI_API_KEY` | No | (empty) | NCBI API key for higher rate limits |
 | `HTE_PUBMED_RETMAX` | No | 10 | Maximum PubMed search results |
 | `HTE_PUBMED_MAX_ABSTRACTS` | No | 3 | Maximum abstracts to fetch per claim |
+| `HTE_TAVILY_API_KEY` | No | (empty) | Tavily API key for optional web search corroboration |
+| `HTE_TAVILY_MAX_RESULTS` | No | 5 | Maximum Tavily results per query |
+| `HTE_TAVILY_SEARCH_DEPTH` | No | basic | Tavily search depth (`basic` or `advanced`) |
 
 ### Example `.env` File
 

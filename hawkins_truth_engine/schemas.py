@@ -30,12 +30,14 @@ class EvidenceItem(BaseModel):
     severity: Literal["low", "medium", "high"]
     evidence: str
     pointers: Pointer = Field(default_factory=Pointer)
-    provenance: dict[str, Any] = Field(default_factory=dict)
+    provenance: dict[str, str | float | int | bool] = Field(default_factory=dict)
 
 
 class LanguageInfo(BaseModel):
     top: str
-    distribution: list[dict[str, Any]] = Field(default_factory=list)
+    distribution: list[dict[str, str | float]] = Field(default_factory=list)
+    detection_failed: bool = Field(default=False, description="Whether language detection failed")
+    failure_reason: str | None = Field(default=None, description="Reason for detection failure if applicable")
 
 
 class Sentence(BaseModel):
@@ -82,7 +84,7 @@ class Document(BaseModel):
     entities: list[Entity]
     attributions: list[Attribution]
     preprocessing_flags: list[str] = Field(default_factory=list)
-    preprocessing_provenance: dict[str, Any] = Field(default_factory=dict)
+    preprocessing_provenance: dict[str, str | float | int | bool | list] = Field(default_factory=dict)
 
 
 class LinguisticOutput(BaseModel):
@@ -108,8 +110,8 @@ class ClaimItem(BaseModel):
     support: Literal["supported", "unsupported", "contested", "unverifiable"]
     reasons: list[str] = Field(default_factory=list)
     pointers: Pointer = Field(default_factory=Pointer)
-    citations: list[dict[str, Any]] = Field(default_factory=list)
-    query_trace: list[dict[str, Any]] = Field(default_factory=list)
+    citations: list[dict[str, str | float | int | bool]] = Field(default_factory=list)
+    query_trace: list[dict[str, str | float | int | bool]] = Field(default_factory=list)
     quality_flags: list[str] = Field(default_factory=list)
     uncertainty_flags: list[str] = Field(default_factory=list)
 
@@ -149,6 +151,9 @@ class VerdictExplanation(BaseModel):
 
 
 class AnalysisResponse(BaseModel):
+    request_id: str = Field(..., description="Unique identifier for this analysis request")
+    timestamp: datetime = Field(default_factory=datetime.now, description="When the analysis was performed")
+    version: str = Field(default="1.0", description="API version")
     document: Document
     linguistic: LinguisticOutput
     statistical: StatisticalOutput
@@ -156,67 +161,92 @@ class AnalysisResponse(BaseModel):
     claims: ClaimsOutput
     aggregation: AggregationOutput
     explanation: VerdictExplanation
+    # Optional graph data (included when include_graphs=True)
+    claim_graph: ClaimGraph | None = None
+    evidence_graph: EvidenceGraph | None = None
 
 
 # Graph Data Schemas
 
+
 class GraphNode(BaseModel):
     """Node in a graph representing a source, claim, or entity."""
-    id: str = Field(..., description="Unique identifier (e.g., 'claim:C1', 'source:S1', 'entity:E1')")
-    type: Literal["source", "claim", "entity"] = Field(..., description="Type of the node")
-    text: str = Field(..., description="Display text for the node")
-    metadata: dict[str, Any] = Field(default_factory=dict, description="Type-specific metadata")
-    confidence: float | None = Field(None, ge=0.0, le=1.0, description="Optional confidence score")
-    created_at: datetime = Field(default_factory=datetime.now, description="Timestamp for provenance")
-    updated_at: datetime = Field(default_factory=datetime.now, description="Last modification timestamp")
 
-    @validator('id')
+    id: str = Field(
+        ...,
+        description="Unique identifier (e.g., 'claim:C1', 'source:S1', 'entity:E1')",
+    )
+    type: Literal["source", "claim", "entity"] = Field(
+        ..., description="Type of the node"
+    )
+    text: str = Field(..., description="Display text for the node")
+    metadata: dict[str, Any] = Field(
+        default_factory=dict, description="Type-specific metadata"
+    )
+    confidence: float | None = Field(
+        None, ge=0.0, le=1.0, description="Optional confidence score"
+    )
+    created_at: datetime = Field(
+        default_factory=datetime.now, description="Timestamp for provenance"
+    )
+    updated_at: datetime = Field(
+        default_factory=datetime.now, description="Last modification timestamp"
+    )
+
+    @validator("id")
     def validate_id_format(cls, v):
         """Validate that ID follows the expected format."""
         if not v:
             raise ValueError("ID cannot be empty")
-        
-        # Check if ID follows the expected pattern (type:identifier)
-        if ':' in v:
-            prefix, identifier = v.split(':', 1)
-            if prefix not in ['source', 'claim', 'entity']:
-                raise ValueError(f"ID prefix '{prefix}' must be one of: source, claim, entity")
+
+        # If a namespace prefix is present, ensure the identifier part exists.
+        # Do not enforce a fixed prefix set: graph/query interfaces may mint custom IDs.
+        if ":" in v:
+            _prefix, identifier = v.split(":", 1)
             if not identifier:
                 raise ValueError("ID identifier part cannot be empty")
-        
+
         return v
 
-    @validator('updated_at', always=True)
+    @validator("updated_at", always=True)
     def set_updated_at(cls, v, values):
         """Ensure updated_at is set to current time on updates."""
         return datetime.now()
 
     class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat()
-        }
+        json_encoders = {datetime: lambda v: v.isoformat()}
 
 
 class GraphEdge(BaseModel):
     """Edge in a graph representing a relationship between nodes."""
+
     id: str = Field(..., description="Unique edge identifier")
     source_id: str = Field(..., description="Source node ID")
     target_id: str = Field(..., description="Target node ID")
-    relationship_type: Literal["MENTIONS", "ATTRIBUTED_TO", "FROM_SOURCE", "SUPPORTS", "CONTRADICTS", "RELATES_TO"] = Field(
-        ..., description="Type of relationship"
-    )
+    relationship_type: Literal[
+        "MENTIONS",
+        "ATTRIBUTED_TO",
+        "FROM_SOURCE",
+        "SUPPORTS",
+        "CONTRADICTS",
+        "RELATES_TO",
+    ] = Field(..., description="Type of relationship")
     weight: float = Field(ge=0.0, le=1.0, description="Relationship strength")
-    provenance: dict[str, Any] = Field(default_factory=dict, description="Evidence for this relationship")
-    created_at: datetime = Field(default_factory=datetime.now, description="Timestamp for provenance")
+    provenance: dict[str, Any] = Field(
+        default_factory=dict, description="Evidence for this relationship"
+    )
+    created_at: datetime = Field(
+        default_factory=datetime.now, description="Timestamp for provenance"
+    )
 
-    @validator('id')
+    @validator("id")
     def validate_edge_id(cls, v):
         """Validate that edge ID is not empty."""
         if not v:
             raise ValueError("Edge ID cannot be empty")
         return v
 
-    @validator('source_id', 'target_id')
+    @validator("source_id", "target_id")
     def validate_node_ids(cls, v):
         """Validate that node IDs are not empty."""
         if not v:
@@ -224,77 +254,102 @@ class GraphEdge(BaseModel):
         return v
 
     class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat()
-        }
+        json_encoders = {datetime: lambda v: v.isoformat()}
 
 
 class ClaimGraph(BaseModel):
     """Graph structure representing relationships between sources, claims, and entities."""
-    nodes: dict[str, GraphNode] = Field(default_factory=dict, description="Node ID → Node mapping")
-    edges: dict[str, GraphEdge] = Field(default_factory=dict, description="Edge ID → Edge mapping")
-    metadata: dict[str, Any] = Field(default_factory=dict, description="Graph-level metadata")
-    created_at: datetime = Field(default_factory=datetime.now, description="Graph creation timestamp")
 
-    @validator('nodes')
+    nodes: dict[str, GraphNode] = Field(
+        default_factory=dict, description="Node ID → Node mapping"
+    )
+    edges: dict[str, GraphEdge] = Field(
+        default_factory=dict, description="Edge ID → Edge mapping"
+    )
+    metadata: dict[str, Any] = Field(
+        default_factory=dict, description="Graph-level metadata"
+    )
+    created_at: datetime = Field(
+        default_factory=datetime.now, description="Graph creation timestamp"
+    )
+
+    @validator("nodes")
     def validate_node_consistency(cls, v):
         """Validate that node IDs in the dictionary match the node's id field."""
         for node_id, node in v.items():
             if node.id != node_id:
-                raise ValueError(f"Node ID mismatch: dictionary key '{node_id}' != node.id '{node.id}'")
+                raise ValueError(
+                    f"Node ID mismatch: dictionary key '{node_id}' != node.id '{node.id}'"
+                )
         return v
 
-    @validator('edges')
+    @validator("edges")
     def validate_edge_consistency(cls, v, values):
         """Validate that edge IDs match and referenced nodes exist."""
-        nodes = values.get('nodes', {})
-        
+        nodes = values.get("nodes", {})
+
         for edge_id, edge in v.items():
             if edge.id != edge_id:
-                raise ValueError(f"Edge ID mismatch: dictionary key '{edge_id}' != edge.id '{edge.id}'")
-            
+                raise ValueError(
+                    f"Edge ID mismatch: dictionary key '{edge_id}' != edge.id '{edge.id}'"
+                )
+
             # Validate that source and target nodes exist
             if edge.source_id not in nodes:
-                raise ValueError(f"Edge '{edge_id}' references non-existent source node '{edge.source_id}'")
+                raise ValueError(
+                    f"Edge '{edge_id}' references non-existent source node '{edge.source_id}'"
+                )
             if edge.target_id not in nodes:
-                raise ValueError(f"Edge '{edge_id}' references non-existent target node '{edge.target_id}'")
-        
+                raise ValueError(
+                    f"Edge '{edge_id}' references non-existent target node '{edge.target_id}'"
+                )
+
         return v
 
     class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat()
-        }
+        json_encoders = {datetime: lambda v: v.isoformat()}
 
 
 class EvidenceGraph(BaseModel):
     """Graph structure representing evidential relationships between claims."""
-    claim_nodes: dict[str, str] = Field(default_factory=dict, description="Claim ID → Node ID mapping")
-    edges: dict[str, GraphEdge] = Field(default_factory=dict, description="Edge ID → Edge mapping")
-    similarity_threshold: float = Field(0.5, ge=0.0, le=1.0, description="Threshold for RELATES_TO edges")
-    metadata: dict[str, Any] = Field(default_factory=dict, description="Graph-level metadata")
-    created_at: datetime = Field(default_factory=datetime.now, description="Graph creation timestamp")
 
-    @validator('edges')
+    claim_nodes: dict[str, str] = Field(
+        default_factory=dict, description="Claim ID → Node ID mapping"
+    )
+    edges: dict[str, GraphEdge] = Field(
+        default_factory=dict, description="Edge ID → Edge mapping"
+    )
+    similarity_threshold: float = Field(
+        0.5, ge=0.0, le=1.0, description="Threshold for RELATES_TO edges"
+    )
+    metadata: dict[str, Any] = Field(
+        default_factory=dict, description="Graph-level metadata"
+    )
+    created_at: datetime = Field(
+        default_factory=datetime.now, description="Graph creation timestamp"
+    )
+
+    @validator("edges")
     def validate_evidence_edges(cls, v):
         """Validate that edges have appropriate relationship types for evidence graph."""
         valid_types = {"SUPPORTS", "CONTRADICTS", "RELATES_TO"}
-        
+
         for edge_id, edge in v.items():
             if edge.relationship_type not in valid_types:
                 raise ValueError(
                     f"Edge '{edge_id}' has invalid relationship type '{edge.relationship_type}' "
                     f"for evidence graph. Must be one of: {valid_types}"
                 )
-        
+
         return v
 
     class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat()
-        }
+        json_encoders = {datetime: lambda v: v.isoformat()}
 
 
 class AnalyzeRequest(BaseModel):
     input_type: InputType
     content: str
+    include_graphs: bool = Field(
+        default=False, description="Include graph data in response"
+    )

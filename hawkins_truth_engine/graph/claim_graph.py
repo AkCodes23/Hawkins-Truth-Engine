@@ -551,6 +551,20 @@ def build_claim_graph(document: Document, claims_output: ClaimsOutput,
     import time
     start_time = time.time()
     
+    # Input validation - handle invalid inputs gracefully
+    if document is None or claims_output is None or source_output is None:
+        return ClaimGraph(
+            nodes={},
+            edges={},
+            metadata={
+                "node_count": 0,
+                "edge_count": 0,
+                "error": "Invalid input - null arguments provided",
+                "builder_version": "1.0",
+            },
+            created_at=datetime.now()
+        )
+    
     builder = ClaimGraphBuilder()
     
     # Performance optimization: Early validation of document size

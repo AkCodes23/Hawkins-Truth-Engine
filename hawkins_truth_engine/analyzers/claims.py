@@ -3,9 +3,10 @@ from __future__ import annotations
 import re
 from typing import Literal
 
-from ..config import PUBMED_MAX_ABSTRACTS
+from ..config import PUBMED_MAX_ABSTRACTS, TAVILY_API_KEY
 from ..external.gdelt import gdelt_doc_search
 from ..external.ncbi import pubmed_efetch_abstract, pubmed_esearch, pubmed_esummary
+from ..external.tavily import tavily_search
 from ..schemas import ClaimItem, ClaimsOutput, Pointer
 from ..utils import find_spans
 
@@ -143,7 +144,7 @@ async def _pubmed_evidence_for_claim(claim: str) -> dict:
             )
     except Exception as e:
         out["uncertainty_flags"].append("ncbi_unavailable")
-        out["uncertainty_flags"].append(str(e))
+        out["query_trace"].append({"provider": "ncbi", "error": str(e)})
     return out
 
 
@@ -166,13 +167,43 @@ async def _gdelt_evidence_for_claim(claim: str) -> dict:
             )
     except Exception as e:
         out["uncertainty_flags"].append("gdelt_unavailable")
-        out["uncertainty_flags"].append(str(e))
+        out["query_trace"].append({"provider": "gdelt", "error": str(e)})
+    return out
+
+
+async def _tavily_evidence_for_claim(claim: str) -> dict:
+    out: dict = {"neighbors": [], "query_trace": [], "uncertainty_flags": []}
+    if not TAVILY_API_KEY:
+        return out
+    try:
+        r = await tavily_search(query=claim)
+        results = (r.get("data") or {}).get("results") or []
+        out["query_trace"].append(
+            {
+                "provider": "tavily",
+                "endpoint": r["request"]["endpoint"],
+                "count": len(results),
+            }
+        )
+        for item in results[:5]:
+            out["neighbors"].append(
+                {
+                    "url": item.get("url"),
+                    "title": item.get("title"),
+                    "content": item.get("content"),
+                    "score": item.get("score"),
+                }
+            )
+    except Exception as e:
+        out["uncertainty_flags"].append("tavily_unavailable")
+        out["query_trace"].append({"provider": "tavily", "error": str(e)})
     return out
 
 
 async def analyze_claims(doc) -> ClaimsOutput:
     triggers = _medical_topic_triggers(doc.display_text)
     medical = bool(triggers)
+    # Aggregate provider uncertainty across claim items for easier UI surfacing.
     uncertainty_flags: list[str] = []
 
     candidates = _claim_candidates([s.text for s in doc.sentences])
@@ -234,6 +265,43 @@ async def analyze_claims(doc) -> ClaimsOutput:
             reasons.append("related_news_coverage_exists")
         if gd.get("uncertainty_flags"):
             uflags.extend(gd.get("uncertainty_flags", []))
+
+        # Optional web search corroboration (Tavily).
+        tv = await _tavily_evidence_for_claim(c)
+        if tv.get("neighbors"):
+            query_trace.extend(tv.get("query_trace", []))
+            citations.extend(
+                [{**n, "provider": "tavily"} for n in tv.get("neighbors", [])]
+            )
+            reasons.append("related_web_results_exist")
+        if tv.get("uncertainty_flags"):
+            uflags.extend(tv.get("uncertainty_flags", []))
+
+        for f in uflags:
+            if f not in uncertainty_flags:
+                uncertainty_flags.append(f)
+
+        # Check if ALL external APIs failed - apply fallback behavior
+        all_apis_failed = (
+            "ncbi_unavailable" in uflags and
+            "gdelt_unavailable" in uflags and
+            ("tavily_unavailable" in uflags or not TAVILY_API_KEY)
+        )
+        
+        if all_apis_failed:
+            # When all APIs fail, mark as unverifiable and add special flags
+            if "all_external_apis_unavailable" not in uflags:
+                uflags.append("all_external_apis_unavailable")
+            if "all_external_apis_unavailable" not in uncertainty_flags:
+                uncertainty_flags.append("all_external_apis_unavailable")
+            # Force support to unverifiable since we cannot verify claims
+            support = "unverifiable"
+            if "no_external_verification_available" not in reasons:
+                reasons.append("no_external_verification_available")
+            quality_flags_to_add = ["degraded_verification"]
+            for qf in quality_flags_to_add:
+                if qf not in qflags:
+                    qflags.append(qf)
 
         if support == "supported":
             supported += 1

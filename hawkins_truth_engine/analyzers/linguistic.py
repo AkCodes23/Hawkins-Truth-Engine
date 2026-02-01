@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 
+from .. import config
 from ..schemas import EvidenceItem, LinguisticOutput, Pointer
 from ..utils import find_spans
 
@@ -30,9 +31,30 @@ _HEDGES = {"may", "might", "could", "possibly", "suggests", "appears"}
 
 
 def analyze_linguistic(doc) -> LinguisticOutput:
+    """Analyze text for linguistic patterns associated with misinformation.
+    
+    Detects linguistic red flags including:
+    - Clickbait punctuation and ALL-CAPS text
+    - Clickbait phrases (e.g., "you won't believe")
+    - Conspiracy framing language (e.g., "deep state", "cover-up")
+    - Urgency cues (e.g., "urgent", "breaking")
+    - Certainty language imbalance (overuse of absolutes)
+    - Anonymous authority claims
+    
+    Args:
+        doc: Document object with text analysis (tokens, entities, etc.)
+        
+    Returns:
+        LinguisticOutput with linguistic risk score (0-1), supporting evidence items,
+        and highlighted suspicious phrases.
+    """
     text = doc.display_text
     signals: list[EvidenceItem] = []
     highlights: list[str] = []
+
+    # Thresholds from config
+    punct_threshold = config.LING_CLICKBAIT_PUNCT_THRESHOLD
+    caps_threshold = config.LING_CLICKBAIT_CAPS_THRESHOLD
 
     # Clickbait punctuation / caps
     exclam = text.count("!")
@@ -41,7 +63,7 @@ def analyze_linguistic(doc) -> LinguisticOutput:
     cap_ratio = (caps_tokens / max(1, len(doc.tokens)))
     punct_score = min(1.0, (exclam + qmarks) / 10.0)
     caps_score = min(1.0, cap_ratio * 8.0)
-    if punct_score > 0.25:
+    if punct_score > punct_threshold:
         signals.append(
             EvidenceItem(
                 id="clickbait_punct",
@@ -49,12 +71,7 @@ def analyze_linguistic(doc) -> LinguisticOutput:
                 weight=0.10,
                 value=punct_score,
                 severity="medium" if punct_score < 0.6 else "high",
-                evidence=f"High punctuation intensity (!/? count={exclam+qmarks}).",
-                pointers=Pointer(char_spans=[]),
-                provenance={"exclam": exclam, "qmarks": qmarks},
-            )
-        )
-    if caps_score > 0.25:
+                evidence=f"High punctuation intensity (!/? count    if caps_score > caps_threshold:
         signals.append(
             EvidenceItem(
                 id="clickbait_caps",
@@ -64,7 +81,7 @@ def analyze_linguistic(doc) -> LinguisticOutput:
                 severity="medium" if caps_score < 0.6 else "high",
                 evidence=f"Unusually high ALL-CAPS token ratio ({cap_ratio:.3f}).",
                 pointers=Pointer(char_spans=[]),
-                provenance={"caps_tokens": caps_tokens, "total_tokens": len(doc.tokens)},
+                provenance={"caps_tokens": caps_tokens, "total_tokens": len(doc.tokens), "threshold": caps_threshold},
             )
         )
 

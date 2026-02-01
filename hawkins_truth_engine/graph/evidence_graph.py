@@ -737,6 +737,26 @@ def build_evidence_graph(claims_output: ClaimsOutput,
     import time
     start_time = time.time()
     
+    # Input validation - handle invalid inputs gracefully
+    if claims_output is None or not hasattr(claims_output, 'claim_items'):
+        return EvidenceGraph(
+            claim_nodes={},
+            edges={},
+            similarity_threshold=0.4,
+            metadata={
+                "num_claims": 0,
+                "num_edges": 0,
+                "construction_time": time.time() - start_time,
+                "error": "Invalid claims_output provided",
+                "builder_version": "2.0_enhanced",
+            },
+            created_at=datetime.now()
+        )
+    
+    # Handle None corroboration
+    if external_corroboration is None:
+        external_corroboration = {}
+    
     claims = claims_output.claim_items
     
     # Performance optimization: Skip graph construction for very small datasets

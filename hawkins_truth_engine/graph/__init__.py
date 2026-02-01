@@ -12,6 +12,7 @@ from .evidence_graph import (
     determine_evidence_relationship,
     create_evidence_edges
 )
+from .query_interface import GraphQueryInterface
 
 __all__ = [
     "build_claim_graph",
@@ -20,4 +21,5 @@ __all__ = [
     "calculate_claim_similarity", 
     "determine_evidence_relationship",
     "create_evidence_edges",
+    "GraphQueryInterface",
 ]
