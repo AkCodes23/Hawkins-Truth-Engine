@@ -1,0 +1,1149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hawkins Truth Engine</title>
+    <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:wght@400;700&family=VT323&family=Special+Elite&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --st-red: #b91c1c;
+            --st-red-glow: #ef4444;
+            --st-dark: #0a0a0a;
+            --st-darker: #050505;
+            --upside-down: #1a0a0a;
+            --text-primary: #e5e5e5;
+            --text-muted: #737373;
+            --neon-blue: #3b82f6;
+            --neon-pink: #ec4899;
+            --real-world-green: #22c55e;
+            --upside-down-red: #dc2626;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Special Elite', cursive;
+            background: var(--st-dark);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* Scanlines overlay */
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(
+                0deg,
+                rgba(0, 0, 0, 0.15),
+                rgba(0, 0, 0, 0.15) 1px,
+                transparent 1px,
+                transparent 2px
+            );
+            pointer-events: none;
+            z-index: 1000;
+        }
+
+        /* Vignette effect */
+        body::after {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(ellipse at center, transparent 0%, rgba(0,0,0,0.6) 100%);
+            pointer-events: none;
+            z-index: 999;
+        }
+
+        /* Floating particles */
+        .particles {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+            overflow: hidden;
+        }
+
+        .particle {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            animation: float 20s infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(100vh) rotate(0deg); opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { transform: translateY(-100vh) rotate(720deg); opacity: 0; }
+        }
+
+        /* Christmas lights */
+        .christmas-lights {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 60px;
+            display: flex;
+            justify-content: space-around;
+            align-items: flex-start;
+            z-index: 100;
+            padding-top: 10px;
+        }
+
+        .light {
+            width: 12px;
+            height: 18px;
+            border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+            animation: flicker 2s infinite;
+            box-shadow: 0 0 10px currentColor, 0 0 20px currentColor, 0 0 30px currentColor;
+        }
+
+        .light:nth-child(5n+1) { color: #ef4444; animation-delay: 0s; }
+        .light:nth-child(5n+2) { color: #22c55e; animation-delay: 0.2s; }
+        .light:nth-child(5n+3) { color: #3b82f6; animation-delay: 0.4s; }
+        .light:nth-child(5n+4) { color: #eab308; animation-delay: 0.6s; }
+        .light:nth-child(5n+5) { color: #ec4899; animation-delay: 0.8s; }
+
+        @keyframes flicker {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+            52% { opacity: 1; }
+            54% { opacity: 0.6; }
+            56% { opacity: 1; }
+        }
+
+        /* Wire connecting lights */
+        .wire {
+            position: fixed;
+            top: 5px;
+            left: 0;
+            width: 100%;
+            height: 20px;
+            z-index: 99;
+        }
+
+        .wire svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .wire path {
+            stroke: #333;
+            stroke-width: 2;
+            fill: none;
+        }
+
+        /* Main container */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 80px 20px 40px;
+            position: relative;
+            z-index: 10;
+        }
+
+        /* Title styling - Stranger Things inspired */
+        .title-container {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .main-title {
+            font-family: 'Libre Baskerville', serif;
+            font-size: clamp(2.5rem, 8vw, 5rem);
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.3em;
+            color: var(--st-red);
+            text-shadow:
+                0 0 10px var(--st-red-glow),
+                0 0 20px var(--st-red-glow),
+                0 0 40px var(--st-red-glow),
+                0 0 80px var(--st-red);
+            animation: title-glow 3s ease-in-out infinite;
+            margin-bottom: 10px;
+        }
+
+        .sub-title {
+            font-family: 'Libre Baskerville', serif;
+            font-size: clamp(1.5rem, 4vw, 2.5rem);
+            font-weight: 400;
+            text-transform: uppercase;
+            letter-spacing: 0.5em;
+            color: var(--st-red);
+            text-shadow:
+                0 0 5px var(--st-red-glow),
+                0 0 10px var(--st-red-glow),
+                0 0 20px var(--st-red);
+        }
+
+        @keyframes title-glow {
+            0%, 100% {
+                text-shadow:
+                    0 0 10px var(--st-red-glow),
+                    0 0 20px var(--st-red-glow),
+                    0 0 40px var(--st-red-glow),
+                    0 0 80px var(--st-red);
+            }
+            50% {
+                text-shadow:
+                    0 0 5px var(--st-red-glow),
+                    0 0 10px var(--st-red-glow),
+                    0 0 20px var(--st-red-glow),
+                    0 0 40px var(--st-red);
+            }
+        }
+
+        .tagline {
+            font-family: 'VT323', monospace;
+            font-size: 1.2rem;
+            color: var(--text-muted);
+            margin-top: 20px;
+            letter-spacing: 0.1em;
+        }
+
+        /* Main grid */
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-top: 30px;
+        }
+
+        @media (max-width: 900px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Cards */
+        .card {
+            background: linear-gradient(135deg, rgba(20, 20, 20, 0.9), rgba(10, 10, 10, 0.95));
+            border: 1px solid rgba(185, 28, 28, 0.3);
+            border-radius: 8px;
+            padding: 25px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--st-red), transparent);
+        }
+
+        .card-title {
+            font-family: 'VT323', monospace;
+            font-size: 1.5rem;
+            color: var(--st-red);
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+        }
+
+        /* Input section */
+        .input-controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .input-type-select {
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(185, 28, 28, 0.5);
+            color: var(--text-primary);
+            padding: 12px 20px;
+            border-radius: 4px;
+            font-family: 'VT323', monospace;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .input-type-select:hover, .input-type-select:focus {
+            border-color: var(--st-red);
+            box-shadow: 0 0 10px rgba(185, 28, 28, 0.3);
+        }
+
+        .analyze-btn {
+            background: linear-gradient(135deg, var(--st-red), #7f1d1d);
+            border: none;
+            color: white;
+            padding: 12px 30px;
+            border-radius: 4px;
+            font-family: 'VT323', monospace;
+            font-size: 1.2rem;
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .analyze-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 0 20px rgba(185, 28, 28, 0.5), 0 0 40px rgba(185, 28, 28, 0.3);
+        }
+
+        .analyze-btn:active {
+            transform: translateY(0);
+        }
+
+        .analyze-btn.loading {
+            pointer-events: none;
+        }
+
+        .analyze-btn.loading::after {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            animation: loading-sweep 1s infinite;
+        }
+
+        @keyframes loading-sweep {
+            to { left: 100%; }
+        }
+
+        .status-indicator {
+            font-family: 'VT323', monospace;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--text-muted);
+        }
+
+        .status-dot.active {
+            background: var(--st-red);
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Textarea */
+        .content-input {
+            width: 100%;
+            min-height: 250px;
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(185, 28, 28, 0.3);
+            border-radius: 4px;
+            padding: 15px;
+            color: var(--text-primary);
+            font-family: 'Special Elite', cursive;
+            font-size: 1rem;
+            line-height: 1.6;
+            resize: vertical;
+            transition: all 0.3s ease;
+        }
+
+        .content-input:focus {
+            outline: none;
+            border-color: var(--st-red);
+            box-shadow: 0 0 15px rgba(185, 28, 28, 0.2);
+        }
+
+        .content-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .disclaimer {
+            font-family: 'VT323', monospace;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            margin-top: 15px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.3);
+            border-left: 2px solid var(--st-red);
+        }
+
+        /* Results section */
+        .results-container {
+            transition: all 0.5s ease;
+        }
+
+        .results-container.upside-down {
+            animation: upside-down-glitch 0.5s ease;
+        }
+
+        @keyframes upside-down-glitch {
+            0% { transform: scale(1); filter: none; }
+            25% { transform: scale(1.02) skewX(2deg); filter: hue-rotate(90deg); }
+            50% { transform: scale(0.98) skewX(-2deg); filter: hue-rotate(180deg); }
+            75% { transform: scale(1.01) skewX(1deg); filter: hue-rotate(270deg); }
+            100% { transform: scale(1); filter: none; }
+        }
+
+        /* World indicator */
+        .world-indicator {
+            text-align: center;
+            padding: 30px;
+            margin-bottom: 25px;
+            border-radius: 8px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .world-indicator.real-world {
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.1), rgba(34, 197, 94, 0.05));
+            border: 2px solid rgba(34, 197, 94, 0.5);
+        }
+
+        .world-indicator.upside-down-world {
+            background: linear-gradient(135deg, rgba(220, 38, 38, 0.15), rgba(220, 38, 38, 0.05));
+            border: 2px solid rgba(220, 38, 38, 0.5);
+            animation: upside-down-pulse 2s infinite;
+        }
+
+        @keyframes upside-down-pulse {
+            0%, 100% { box-shadow: 0 0 20px rgba(220, 38, 38, 0.3); }
+            50% { box-shadow: 0 0 40px rgba(220, 38, 38, 0.5); }
+        }
+
+        .world-label {
+            font-family: 'Libre Baskerville', serif;
+            font-size: 2rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.3em;
+            margin-bottom: 10px;
+        }
+
+        .real-world .world-label {
+            color: var(--real-world-green);
+            text-shadow: 0 0 10px var(--real-world-green);
+        }
+
+        .upside-down-world .world-label {
+            color: var(--upside-down-red);
+            text-shadow: 0 0 10px var(--upside-down-red), 0 0 20px var(--upside-down-red);
+        }
+
+        .verdict-text {
+            font-family: 'VT323', monospace;
+            font-size: 1.3rem;
+            color: var(--text-primary);
+        }
+
+        /* Score display */
+        .score-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 30px;
+            margin: 25px 0;
+            flex-wrap: wrap;
+        }
+
+        .score-circle {
+            width: 140px;
+            height: 140px;
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+
+        .score-circle::before {
+            content: "";
+            position: absolute;
+            top: -3px;
+            left: -3px;
+            right: -3px;
+            bottom: -3px;
+            border-radius: 50%;
+            background: conic-gradient(var(--score-color, var(--st-red)) var(--score-percent, 0%), transparent var(--score-percent, 0%));
+            z-index: -1;
+        }
+
+        .score-circle::after {
+            content: "";
+            position: absolute;
+            top: 5px;
+            left: 5px;
+            right: 5px;
+            bottom: 5px;
+            border-radius: 50%;
+            background: var(--st-dark);
+            z-index: -1;
+        }
+
+        .score-value {
+            font-family: 'VT323', monospace;
+            font-size: 3rem;
+            font-weight: bold;
+        }
+
+        .score-label {
+            font-family: 'VT323', monospace;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        /* Stats grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .stat-item {
+            background: rgba(0, 0, 0, 0.4);
+            padding: 15px;
+            border-radius: 4px;
+            border-left: 3px solid var(--st-red);
+        }
+
+        .stat-label {
+            font-family: 'VT323', monospace;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+
+        .stat-value {
+            font-family: 'VT323', monospace;
+            font-size: 1.4rem;
+            color: var(--text-primary);
+        }
+
+        /* Evidence section */
+        .evidence-section {
+            margin-top: 30px;
+        }
+
+        .evidence-title {
+            font-family: 'VT323', monospace;
+            font-size: 1.3rem;
+            color: var(--st-red);
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .evidence-title::before {
+            content: "▸";
+        }
+
+        .evidence-list {
+            list-style: none;
+        }
+
+        .evidence-item {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 12px 15px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            border-left: 3px solid var(--neon-pink);
+            font-family: 'Special Elite', cursive;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            transition: all 0.3s ease;
+        }
+
+        .evidence-item:hover {
+            background: rgba(0, 0, 0, 0.5);
+            transform: translateX(5px);
+        }
+
+        .evidence-item.high-severity {
+            border-left-color: var(--upside-down-red);
+        }
+
+        .evidence-item.medium-severity {
+            border-left-color: #f59e0b;
+        }
+
+        .evidence-item.low-severity {
+            border-left-color: var(--neon-blue);
+        }
+
+        /* Uncertainty flags */
+        .uncertainty-flags {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(220, 38, 38, 0.1);
+            border: 1px dashed rgba(220, 38, 38, 0.5);
+            border-radius: 4px;
+        }
+
+        .uncertainty-title {
+            font-family: 'VT323', monospace;
+            color: var(--upside-down-red);
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .uncertainty-title::before {
+            content: "⚠";
+        }
+
+        .flag-tag {
+            display: inline-block;
+            background: rgba(220, 38, 38, 0.2);
+            color: var(--upside-down-red);
+            padding: 4px 10px;
+            border-radius: 3px;
+            font-family: 'VT323', monospace;
+            font-size: 0.9rem;
+            margin: 3px;
+        }
+
+        /* Full response card */
+        .full-response-card {
+            margin-top: 30px;
+        }
+
+        .response-toggle {
+            background: transparent;
+            border: 1px solid rgba(185, 28, 28, 0.5);
+            color: var(--text-primary);
+            padding: 10px 20px;
+            border-radius: 4px;
+            font-family: 'VT323', monospace;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+            text-align: left;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .response-toggle:hover {
+            background: rgba(185, 28, 28, 0.1);
+        }
+
+        .response-toggle .arrow {
+            transition: transform 0.3s ease;
+        }
+
+        .response-toggle.open .arrow {
+            transform: rotate(180deg);
+        }
+
+        .response-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.5s ease;
+        }
+
+        .response-content.open {
+            max-height: 600px;
+        }
+
+        .json-output {
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(185, 28, 28, 0.2);
+            border-radius: 4px;
+            padding: 15px;
+            margin-top: 15px;
+            max-height: 500px;
+            overflow: auto;
+            font-family: 'VT323', monospace;
+            font-size: 0.85rem;
+            line-height: 1.4;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        /* Initial state */
+        .results-placeholder {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-muted);
+        }
+
+        .placeholder-icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            opacity: 0.3;
+        }
+
+        .placeholder-text {
+            font-family: 'VT323', monospace;
+            font-size: 1.2rem;
+        }
+
+        /* Alphabet wall (easter egg for loading) */
+        .alphabet-wall {
+            display: none;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 5px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .alphabet-wall.active {
+            display: flex;
+        }
+
+        .alphabet-letter {
+            font-family: 'Special Elite', cursive;
+            font-size: 1.5rem;
+            color: var(--text-muted);
+            padding: 5px;
+            transition: all 0.3s ease;
+        }
+
+        .alphabet-letter.lit {
+            color: var(--st-red);
+            text-shadow: 0 0 10px var(--st-red), 0 0 20px var(--st-red);
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 600px) {
+            .main-title {
+                letter-spacing: 0.15em;
+            }
+
+            .sub-title {
+                letter-spacing: 0.2em;
+            }
+
+            .score-container {
+                flex-direction: column;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Hidden initially */
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <!-- Particles -->
+    <div class="particles" id="particles"></div>
+
+    <!-- Christmas lights -->
+    <div class="christmas-lights" id="lights"></div>
+
+    <!-- Wire -->
+    <svg class="wire" viewBox="0 0 100 10" preserveAspectRatio="none">
+        <path d="M0,5 Q10,8 20,5 T40,5 T60,5 T80,5 T100,5" />
+    </svg>
+
+    <div class="container">
+        <!-- Title -->
+        <div class="title-container">
+            <h1 class="main-title">Hawkins</h1>
+            <h2 class="sub-title">Truth Engine</h2>
+            <p class="tagline">// Separating the Real World from the Upside Down //</p>
+        </div>
+
+        <!-- Main grid -->
+        <div class="main-grid">
+            <!-- Input card -->
+            <div class="card">
+                <h3 class="card-title">▸ Investigate Content</h3>
+
+                <div class="input-controls">
+                    <select class="input-type-select" id="inputType">
+                        <option value="raw_text">Raw Text</option>
+                        <option value="url">URL</option>
+                        <option value="social_post">Social Post</option>
+                    </select>
+
+                    <button class="analyze-btn" id="analyzeBtn" onclick="analyze()">
+                        Analyze
+                    </button>
+
+                    <div class="status-indicator">
+                        <span class="status-dot" id="statusDot"></span>
+                        <span id="statusText">Ready</span>
+                    </div>
+                </div>
+
+                <textarea
+                    class="content-input"
+                    id="contentInput"
+                    placeholder="Paste suspicious content here...
+
+Enter news articles, social media posts, or URLs that you want to investigate. The Truth Engine will analyze linguistic patterns, verify sources, and cross-reference claims to determine if the content belongs to the Real World or the Upside Down."
+                ></textarea>
+
+                <div class="disclaimer">
+                    ⚠ This tool provides evidence-based credibility signals, not absolute truth.
+                    Human judgment remains essential. "Unsupported" ≠ "False".
+                </div>
+            </div>
+
+            <!-- Results card -->
+            <div class="card">
+                <h3 class="card-title">▸ Investigation Results</h3>
+
+                <div class="results-container" id="resultsContainer">
+                    <!-- Placeholder -->
+                    <div class="results-placeholder" id="placeholder">
+                        <div class="placeholder-icon">🔮</div>
+                        <p class="placeholder-text">Awaiting content to investigate...</p>
+                    </div>
+
+                    <!-- Alphabet wall for loading -->
+                    <div class="alphabet-wall" id="alphabetWall">
+                        <!-- Letters will be generated by JS -->
+                    </div>
+
+                    <!-- Results (hidden initially) -->
+                    <div id="results" class="hidden">
+                        <!-- World indicator -->
+                        <div class="world-indicator" id="worldIndicator">
+                            <div class="world-label" id="worldLabel">--</div>
+                            <div class="verdict-text" id="verdictText">--</div>
+                        </div>
+
+                        <!-- Score display -->
+                        <div class="score-container">
+                            <div class="score-circle" id="scoreCircle">
+                                <span class="score-value" id="scoreValue">--</span>
+                                <span class="score-label">Credibility</span>
+                            </div>
+                        </div>
+
+                        <!-- Stats grid -->
+                        <div class="stats-grid">
+                            <div class="stat-item">
+                                <div class="stat-label">Verdict</div>
+                                <div class="stat-value" id="verdictStat">--</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-label">Confidence</div>
+                                <div class="stat-value" id="confidenceStat">--</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-label">Claims Found</div>
+                                <div class="stat-value" id="claimsStat">--</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-label">Risk Level</div>
+                                <div class="stat-value" id="riskStat">--</div>
+                            </div>
+                        </div>
+
+                        <!-- Evidence section -->
+                        <div class="evidence-section">
+                            <div class="evidence-title">Key Evidence</div>
+                            <ul class="evidence-list" id="evidenceList">
+                                <!-- Evidence items will be added here -->
+                            </ul>
+                        </div>
+
+                        <!-- Uncertainty flags -->
+                        <div class="uncertainty-flags hidden" id="uncertaintyFlags">
+                            <div class="uncertainty-title">Uncertainty Flags</div>
+                            <div id="flagsContainer"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Full response card -->
+        <div class="card full-response-card">
+            <button class="response-toggle" id="responseToggle" onclick="toggleResponse()">
+                <span>▸ Full Analysis Response (JSON)</span>
+                <span class="arrow">▼</span>
+            </button>
+            <div class="response-content" id="responseContent">
+                <pre class="json-output" id="jsonOutput">// Analysis response will appear here...</pre>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize particles
+        function createParticles() {
+            const container = document.getElementById('particles');
+            for (let i = 0; i < 50; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                particle.style.left = Math.random() * 100 + '%';
+                particle.style.animationDelay = Math.random() * 20 + 's';
+                particle.style.animationDuration = (15 + Math.random() * 10) + 's';
+                container.appendChild(particle);
+            }
+        }
+
+        // Initialize Christmas lights
+        function createLights() {
+            const container = document.getElementById('lights');
+            const count = Math.floor(window.innerWidth / 40);
+            for (let i = 0; i < count; i++) {
+                const light = document.createElement('div');
+                light.className = 'light';
+                light.style.backgroundColor = 'currentColor';
+                container.appendChild(light);
+            }
+        }
+
+        // Initialize alphabet wall
+        function createAlphabetWall() {
+            const container = document.getElementById('alphabetWall');
+            const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+            alphabet.split('').forEach(letter => {
+                const span = document.createElement('span');
+                span.className = 'alphabet-letter';
+                span.textContent = letter;
+                span.dataset.letter = letter;
+                container.appendChild(span);
+            });
+        }
+
+        // Light up letters (loading animation)
+        function lightUpMessage(message, callback) {
+            const wall = document.getElementById('alphabetWall');
+            wall.classList.add('active');
+
+            const letters = wall.querySelectorAll('.alphabet-letter');
+            letters.forEach(l => l.classList.remove('lit'));
+
+            let index = 0;
+            const chars = message.toUpperCase().split('');
+
+            function lightNext() {
+                if (index >= chars.length) {
+                    setTimeout(() => {
+                        wall.classList.remove('active');
+                        if (callback) callback();
+                    }, 500);
+                    return;
+                }
+
+                const char = chars[index];
+                if (char !== ' ') {
+                    const letter = wall.querySelector(`[data-letter="${char}"]`);
+                    if (letter) {
+                        letters.forEach(l => l.classList.remove('lit'));
+                        letter.classList.add('lit');
+                    }
+                }
+                index++;
+                setTimeout(lightNext, 200);
+            }
+
+            lightNext();
+        }
+
+        // Main analyze function
+        async function analyze() {
+            const inputType = document.getElementById('inputType').value;
+            const content = document.getElementById('contentInput').value.trim();
+
+            if (!content) {
+                alert('Please enter content to analyze');
+                return;
+            }
+
+            // Update UI state
+            const btn = document.getElementById('analyzeBtn');
+            const statusDot = document.getElementById('statusDot');
+            const statusText = document.getElementById('statusText');
+            const placeholder = document.getElementById('placeholder');
+            const results = document.getElementById('results');
+
+            btn.classList.add('loading');
+            btn.textContent = 'Analyzing...';
+            statusDot.classList.add('active');
+            statusText.textContent = 'Investigating...';
+
+            placeholder.classList.add('hidden');
+            results.classList.add('hidden');
+
+            // Show alphabet wall loading
+            lightUpMessage('SEARCHING', null);
+
+            try {
+                const response = await fetch('/analyze', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ input_type: inputType, content })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.detail || 'Analysis failed');
+                }
+
+                // Hide alphabet wall and show results
+                document.getElementById('alphabetWall').classList.remove('active');
+                displayResults(data);
+
+            } catch (error) {
+                document.getElementById('alphabetWall').classList.remove('active');
+                alert('Error: ' + error.message);
+                placeholder.classList.remove('hidden');
+            } finally {
+                btn.classList.remove('loading');
+                btn.textContent = 'Analyze';
+                statusDot.classList.remove('active');
+                statusText.textContent = 'Ready';
+            }
+        }
+
+        // Display results
+        function displayResults(data) {
+            const results = document.getElementById('results');
+            const resultsContainer = document.getElementById('resultsContainer');
+            const worldIndicator = document.getElementById('worldIndicator');
+
+            results.classList.remove('hidden');
+
+            const agg = data.aggregation;
+            const isUpsideDown = agg.world_label !== 'Real World';
+
+            // Apply glitch effect for Upside Down
+            if (isUpsideDown) {
+                resultsContainer.classList.add('upside-down');
+                setTimeout(() => resultsContainer.classList.remove('upside-down'), 500);
+            }
+
+            // World indicator
+            worldIndicator.className = 'world-indicator ' + (isUpsideDown ? 'upside-down-world' : 'real-world');
+            document.getElementById('worldLabel').textContent = agg.world_label;
+            document.getElementById('verdictText').textContent = data.explanation.verdict_text;
+
+            // Score circle
+            const score = agg.credibility_score;
+            const scoreCircle = document.getElementById('scoreCircle');
+            const scoreColor = score >= 70 ? '#22c55e' : score >= 40 ? '#f59e0b' : '#dc2626';
+            scoreCircle.style.setProperty('--score-color', scoreColor);
+            scoreCircle.style.setProperty('--score-percent', score + '%');
+            document.getElementById('scoreValue').textContent = score;
+            document.getElementById('scoreValue').style.color = scoreColor;
+
+            // Stats
+            document.getElementById('verdictStat').textContent = agg.verdict;
+            document.getElementById('confidenceStat').textContent = Math.round(agg.confidence * 100) + '%';
+
+            const totalClaims = (data.claims.supported_count || 0) +
+                               (data.claims.unsupported_count || 0) +
+                               (data.claims.unverifiable_count || 0);
+            document.getElementById('claimsStat').textContent = totalClaims;
+
+            const linguisticRisk = data.linguistic.linguistic_risk_score;
+            let riskLevel = 'Low';
+            if (linguisticRisk > 0.6) riskLevel = 'High';
+            else if (linguisticRisk > 0.3) riskLevel = 'Medium';
+            document.getElementById('riskStat').textContent = riskLevel;
+
+            // Evidence list
+            const evidenceList = document.getElementById('evidenceList');
+            evidenceList.innerHTML = '';
+
+            data.explanation.evidence_bullets.slice(0, 8).forEach(bullet => {
+                const li = document.createElement('li');
+                li.className = 'evidence-item';
+
+                // Determine severity from bullet text
+                if (bullet.toLowerCase().includes('conspiracy') || bullet.toLowerCase().includes('high')) {
+                    li.classList.add('high-severity');
+                } else if (bullet.toLowerCase().includes('clickbait') || bullet.toLowerCase().includes('medium')) {
+                    li.classList.add('medium-severity');
+                } else {
+                    li.classList.add('low-severity');
+                }
+
+                li.textContent = bullet;
+                evidenceList.appendChild(li);
+            });
+
+            // Uncertainty flags
+            const flagsContainer = document.getElementById('flagsContainer');
+            const uncertaintySection = document.getElementById('uncertaintyFlags');
+
+            if (agg.uncertainty_flags && agg.uncertainty_flags.length > 0) {
+                uncertaintySection.classList.remove('hidden');
+                flagsContainer.innerHTML = '';
+                agg.uncertainty_flags.forEach(flag => {
+                    const span = document.createElement('span');
+                    span.className = 'flag-tag';
+                    span.textContent = flag;
+                    flagsContainer.appendChild(span);
+                });
+            } else {
+                uncertaintySection.classList.add('hidden');
+            }
+
+            // JSON output
+            document.getElementById('jsonOutput').textContent = JSON.stringify(data, null, 2);
+        }
+
+        // Toggle response panel
+        function toggleResponse() {
+            const toggle = document.getElementById('responseToggle');
+            const content = document.getElementById('responseContent');
+            toggle.classList.toggle('open');
+            content.classList.toggle('open');
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            createParticles();
+            createLights();
+            createAlphabetWall();
+        });
+
+        // Keyboard shortcut
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.key === 'Enter') {
+                analyze();
+            }
+        });
+    </script>
+</body>
+</html>

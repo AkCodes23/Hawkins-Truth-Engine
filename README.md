@@ -298,285 +298,321 @@ Generates human-readable output:
 
 ## Module Reference
 
-### `hawkins_truth_engine/ingest.py` — Document Builder
+### Core Processing Pipeline
 
-**Purpose**: Transforms raw input into a structured `Document` for analysis.
+The Hawkins Truth Engine processes content through a systematic pipeline where each module has a specific role in building evidence for credibility assessment.
+
+---
+
+### 🔄 `hawkins_truth_engine/ingest.py` — Document Builder & Preprocessor
+
+**What it does**: Converts raw input (text, URLs, social posts) into a structured `Document` that all analyzers can work with.
+
+**Why it's essential**: Without proper preprocessing, analyzers would work with inconsistent, messy data. This module standardizes everything into a clean format with metadata like sentences, tokens, entities, and attributions.
+
+**How it works**:
+1. **URL Fetching**: Downloads web pages with size limits and timeout protection
+2. **Text Extraction**: Uses trafilatura (with BeautifulSoup fallback) to extract clean text from HTML
+3. **Content Parsing**: Breaks text into sentences and tokens with precise character positions
+4. **Entity Recognition**: Identifies people and organizations using capitalization patterns
+5. **Attribution Detection**: Finds quotes and who said them using regex patterns
+6. **Language Detection**: Determines the primary language of the content
 
 **Key Functions**:
 
-| Function | Description |
-|----------|-------------|
-| `fetch_url(url)` | Async HTTP fetch with bounded size (`FETCH_MAX_BYTES`), User-Agent spoofing, timeout handling |
-| `extract_text_from_html(html, url)` | trafilatura extraction with BeautifulSoup fallback; extracts title, author, publication date |
-| `_sentences(text)` | Regex-based sentence splitting with approximate character spans |
-| `_tokens(text)` | Whitespace tokenization with per-token character positions |
-| `_entities_best_effort(sentences, tokens)` | Heuristic NER: capitalized multi-word sequences classified as PERSON/ORG by suffix |
-| `_attributions_best_effort(sentences, entities)` | Quote detection via regex; attribution verb matching ("said", "claimed", "reported") |
-| `_best_effort_language(text)` | Language detection using langdetect library |
-| `build_document(input_type, content)` | Main pipeline orchestrator |
+| Function | What It Does | Why It Matters |
+|----------|-------------|----------------|
+| `fetch_url(url)` | Downloads web pages safely with size/timeout limits | Prevents system abuse and hanging requests |
+| `extract_text_from_html(html, url)` | Extracts clean text + metadata (title, author, date) | Gets structured content instead of raw HTML |
+| `_sentences(text)` | Splits text into sentences with character positions | Enables precise highlighting and reference tracking |
+| `_tokens(text)` | Breaks text into words with positions | Allows statistical analysis and pattern detection |
+| `_entities_best_effort(sentences, tokens)` | Finds people/organizations in text | Helps detect anonymous vs. attributed claims |
+| `_attributions_best_effort(sentences, entities)` | Matches quotes to speakers | Critical for assessing claim attribution |
 
-**Preprocessing Flags**:
-- `fetch_error`: URL retrieval failed
-- `missing_author`: No author metadata extracted
-- `missing_published_at`: No publication date found
-
-**Output Schema**: `Document` (see `schemas.py`)
+**Output**: A structured `Document` object containing all extracted features that other modules need.
 
 ---
 
-### `hawkins_truth_engine/analyzers/linguistic.py` — Linguistic Pattern Analyzer
+### 📝 `hawkins_truth_engine/analyzers/linguistic.py` — Writing Pattern Detector
 
-**Purpose**: Detects writing patterns associated with misinformation.
+**What it does**: Analyzes how content is written to detect patterns commonly found in misinformation.
 
-**Detected Patterns**:
+**Why it's essential**: Misinformation often uses specific language patterns (clickbait, conspiracy framing, urgency) that legitimate news avoids. These patterns are strong credibility signals.
 
-| Pattern | Detection Method | Severity |
-|---------|-----------------|----------|
-| Clickbait Punctuation | High `!` and `?` frequency (>0.25 ratio) | medium |
-| Clickbait Caps | High ALL-CAPS token ratio | medium |
-| Clickbait Phrases | 7 phrases: "you won't believe", "shocking", "what happened next", "doctors hate", "miracle", "secret", "exposed" | medium |
-| Conspiracy Phrases | 5 phrases: "they don't want you to know", "mainstream media", "cover-up", "deep state", "big pharma" | high |
-| Urgency Lexicon | Keywords: "urgent", "now", "immediately", "warning", "alert", "breaking" | low |
-| Certainty/Hedging Imbalance | Certainty words without hedging language | medium |
-| Anonymous Authority | "experts say", "scientists say" without named entities | medium |
+**How it works**: Scans text for suspicious writing patterns and assigns risk scores based on frequency and severity.
 
-**Output Schema**: `LinguisticOutput`
-```python
-class LinguisticOutput(BaseModel):
-    linguistic_risk_score: float  # 0.0 - 1.0
-    signals: list[EvidenceItem]
-    highlighted_phrases: list[str]
-```
+**Detected Patterns & Why They Matter**:
+
+| Pattern | How It's Detected | Why It Indicates Risk |
+|---------|------------------|----------------------|
+| **Clickbait Punctuation** | High `!` and `?` frequency (>25% of sentences) | Legitimate news uses measured tone; excessive punctuation suggests sensationalism |
+| **Clickbait Caps** | High ALL-CAPS token ratio | Professional writing avoids shouting; caps suggest emotional manipulation |
+| **Clickbait Phrases** | "you won't believe", "shocking", "miracle", "secret", "exposed" | These phrases are designed to bypass critical thinking |
+| **Conspiracy Phrases** | "they don't want you to know", "mainstream media", "cover-up", "deep state" | Indicates conspiratorial framing that undermines institutional trust |
+| **Urgency Lexicon** | "urgent", "now", "immediately", "warning", "alert", "breaking" | Creates false time pressure to prevent fact-checking |
+| **Certainty Without Hedging** | Absolute claims without qualifying language | Legitimate sources use hedging ("may", "suggests") for uncertain claims |
+| **Anonymous Authority** | "experts say", "scientists say" without names | Vague attribution is a red flag; credible sources name their experts |
+
+**Output**: Risk score (0-1) plus specific evidence items with text highlighting for each detected pattern.
 
 ---
 
-### `hawkins_truth_engine/analyzers/statistical.py` — Statistical Pattern Analyzer
+### 📊 `hawkins_truth_engine/analyzers/statistical.py` — Text Structure Analyzer
 
-**Purpose**: Identifies statistical anomalies in text structure.
+**What it does**: Examines the mathematical properties of text to detect artificial or manipulated content.
 
-**Detected Patterns**:
+**Why it's essential**: Human writing has natural statistical patterns. Content that deviates significantly from these patterns may be generated, templated, or manipulated.
 
-| Pattern | Threshold | Interpretation |
+**How it works**: Calculates statistical measures of text structure and flags unusual patterns.
+
+**Detected Anomalies & Their Significance**:
+
+| Pattern | Threshold | What It Reveals |
 |---------|-----------|----------------|
-| Low Lexical Diversity | Vocabulary richness < 0.22 (for >200 tokens) | Repetitive/templated content |
-| High Repetition Ratio | Top 5 tokens > 12% of text (for >120 tokens) | Keyword stuffing |
-| Uniform Sentence Length | CoV < 0.35 (for ≥8 sentences) | Artificial/generated text |
-| Low Token Entropy | Normalized entropy < 0.72 | Irregular word distribution |
+| **Low Lexical Diversity** | Vocabulary richness < 0.22 (for >200 tokens) | Repetitive content suggests keyword stuffing or template generation |
+| **High Repetition Ratio** | Top 5 tokens > 12% of text (for >120 tokens) | Excessive repetition indicates SEO manipulation or bot-generated content |
+| **Uniform Sentence Length** | Coefficient of variation < 0.35 (for ≥8 sentences) | Natural writing varies sentence length; uniformity suggests artificial generation |
+| **Low Token Entropy** | Normalized entropy < 0.72 | Irregular word distribution may indicate manipulation or poor translation |
 
-**Output Schema**: `StatisticalOutput`
-```python
-class StatisticalOutput(BaseModel):
-    statistical_risk_score: float  # 0.0 - 1.0
-    evidence: list[EvidenceItem]
-```
+**Why these patterns matter**: Legitimate journalism has natural variation in vocabulary, sentence structure, and word usage. Statistical anomalies often indicate content designed to manipulate search engines or readers rather than inform them.
+
+**Output**: Risk score (0-1) plus evidence items explaining which statistical thresholds were exceeded.
 
 ---
 
-### `hawkins_truth_engine/analyzers/source_intel.py` — Source Intelligence Analyzer
+### 🔍 `hawkins_truth_engine/analyzers/source_intel.py` — Source Credibility Assessor
 
-**Purpose**: Assesses credibility based on source metadata.
+**What it does**: Investigates the source of content to assess its trustworthiness based on domain history and metadata.
 
-**Intelligence Checks**:
+**Why it's essential**: The source of information is often as important as the content itself. New domains, missing authorship, and suspicious registration patterns are strong credibility indicators.
 
-| Check | Source | Impact |
-|-------|--------|--------|
-| Domain Age | RDAP lookup | Young (<90 days) = -0.20 trust; Old (>1 year) = +0.10 trust |
-| Domain Hold Status | RDAP status field | `clienthold`/`serverhold` = high severity flag |
-| Missing Author | Document metadata | -0.10 trust |
-| Missing Publication Date | Document metadata | -0.05 trust |
-| RDAP Unavailable | External service | Adds uncertainty flag |
+**How it works**: Queries external services to gather intelligence about domains and analyzes document metadata.
 
-**External Dependency**: `hawkins_truth_engine/external/rdap.py`
+**Intelligence Checks & Their Importance**:
 
-**Output Schema**: `SourceIntelOutput`
-```python
-class SourceIntelOutput(BaseModel):
-    source_trust_score: float  # 0.0 - 1.0 (initial: 0.5)
-    source_flags: list[EvidenceItem]
-    uncertainty_flags: list[str]
-```
+| Check | Data Source | Why It Matters |
+|-------|-------------|----------------|
+| **Domain Age** | RDAP registry lookup | New domains (<90 days) are often used for misinformation campaigns; established domains (>1 year) have more credibility |
+| **Domain Hold Status** | RDAP status field | Domains on "hold" may be suspended for policy violations or disputes |
+| **Missing Author** | Document metadata | Anonymous content lacks accountability; credible sources identify their writers |
+| **Missing Publication Date** | Document metadata | Undated content prevents verification and context assessment |
+| **RDAP Service Availability** | External service status | When domain intelligence is unavailable, confidence is reduced |
+
+**Trust Score Calculation**:
+- Starts at neutral (0.5)
+- Young domains: -0.20 penalty
+- Old domains: +0.10 bonus  
+- Missing author: -0.10 penalty
+- Missing date: -0.05 penalty
+
+**Output**: Trust score (0-1), evidence flags, and uncertainty indicators when external services fail.
 
 ---
 
-### `hawkins_truth_engine/analyzers/claims.py` — Claims & Corroboration Analyzer
+### 🎯 `hawkins_truth_engine/analyzers/claims.py` — Claim Extraction & Verification
 
-**Purpose**: Extracts claims and seeks external corroboration.
+**What it does**: Identifies factual claims in content and searches external databases to verify them.
+
+**Why it's essential**: The core of misinformation detection is checking whether claims can be supported by credible sources. This module does the heavy lifting of fact-checking.
+
+**How it works**:
+1. **Claim Extraction**: Identifies declarative sentences that make factual assertions
+2. **Claim Classification**: Categorizes claims by type (factual, speculative, predictive, opinion)
+3. **Medical Detection**: Flags health-related content for special handling
+4. **External Verification**: Searches PubMed (medical) and GDELT (news) for supporting evidence
+5. **Support Labeling**: Classifies each claim's level of external support
 
 **Claim Processing Pipeline**:
-
 ```
-Document → Claim Candidates (up to 12) → Claim Classification →
-           Medical Topic Detection → Corroboration Search →
-           Support Labeling
+Document → Extract Claims (up to 12) → Classify Type → Detect Medical Topics → 
+Search External Sources → Analyze Relevance → Assign Support Labels
 ```
 
-**Claim Types**:
-- `factual`: Verifiable statement of fact
-- `speculative`: Hedged or uncertain claim
-- `predictive`: Future-oriented claim
-- `opinion_presented_as_fact`: Subjective claim stated as objective
+**Support Classification & Meaning**:
 
-**Support Labels**:
-- `supported`: ≥2 citations with matching snippets
-- `unsupported`: Strong claim without attribution, no backing found
-- `unverifiable`: No hits or unclear results
-- `contested`: Conflicting evidence found
+| Label | Criteria | What It Means |
+|-------|----------|---------------|
+| **Supported** | ≥2 external citations with relevant snippets | Strong evidence backing the claim |
+| **Unsupported** | Strong claim without attribution + no external backing | Red flag: confident claim with no support |
+| **Unverifiable** | No relevant search results or unclear matches | Cannot confirm or deny with available sources |
+| **Contested** | Conflicting evidence found in search results | Claim has both supporting and opposing evidence |
 
-**Medical Topic Detection**: 28 trigger terms including "cure", "vaccine", "covid", "cancer", "treatment", "side effects", "FDA", "clinical trial"
+**Medical Topic Handling**:
+- Detects 28+ medical trigger terms ("cure", "vaccine", "covid", "cancer", etc.)
+- Uses PubMed for scientific literature verification
+- Flags strong medical claims without attribution as high-risk
+- Special handling because medical misinformation can cause physical harm
 
-**External Dependencies**:
-- `hawkins_truth_engine/external/ncbi.py` — PubMed E-utilities
-- `hawkins_truth_engine/external/gdelt.py` — GDELT DOC API
+**External Data Sources**:
+- **PubMed (NCBI)**: Biomedical literature for health claims
+- **GDELT**: Global news archive for general factual claims
 
-**Output Schema**: `ClaimsOutput`
-```python
-class ClaimsOutput(BaseModel):
-    supported_count: int
-    unsupported_count: int
-    unverifiable_count: int
-    contested_count: int
-    claims: list[ClaimItem]
-    is_medical_topic: bool
-    medical_triggers: list[str]
-    uncertainty_flags: list[str]
-```
+**Output**: Claim counts by support level, medical topic flags, and detailed claim items with verification results.
 
 ---
 
-### `hawkins_truth_engine/reasoning.py` — Deterministic Rule Engine
+### ⚖️ `hawkins_truth_engine/reasoning.py` — Decision Engine
 
-**Purpose**: Aggregates evidence into a final verdict using explicit rules.
+**What it does**: Combines evidence from all analyzers using explicit, auditable rules to produce a final credibility verdict.
 
-**Data Flow**:
+**Why it's essential**: Raw analyzer outputs need to be intelligently combined. This module implements the decision logic that determines whether content is credible, suspicious, or likely fake.
+
+**How it works**: Uses a deterministic rule system (not machine learning) where every decision can be traced and explained.
+
+**Decision Process**:
 ```
-Module Outputs → Signals Dataclass → Base Risk Calculation →
-                 Source Trust Gate → Claim Adjustments →
-                 Rule Overrides → Final Score → Verdict → World Label
+Analyzer Outputs → Extract Signals → Calculate Base Risk → Apply Source Trust Gate → 
+Adjust for Claims → Apply Rule Overrides → Generate Final Score → Assign Verdict
 ```
 
-**Output Schema**: `AggregationOutput`
-```python
-class AggregationOutput(BaseModel):
-    credibility_score: int          # 0-100
-    verdict: Verdict                # Likely Real | Suspicious | Likely Fake
-    world_label: WorldLabel         # Real World | Upside Down
-    confidence: float               # 0.0-1.0 (heuristic, uncalibrated)
-    uncertainty_flags: list[str]
-    reasoning_path: list[ReasoningStep]
-```
+**Core Rules**:
+
+| Rule | Trigger Conditions | Effect | Rationale |
+|------|-------------------|--------|-----------|
+| **R1: High-Risk Combination** | Low source trust + high linguistic risk + no claim support | Force toward "Likely Fake" | Multiple red flags together indicate high misinformation probability |
+| **R2: Medical Harm Potential** | Medical topic + strong unsupported claims | Add uncertainty flag | Medical misinformation requires extra caution due to harm potential |
+| **R3: High-Trust Override** | High source trust + low risk signals | Force toward "Likely Real" | Trusted sources with clean signals get credibility boost |
+
+**Scoring Algorithm**:
+1. **Base Risk**: 55% linguistic + 45% statistical risk
+2. **Source Gate**: Amplify risk for untrusted sources, dampen for trusted ones
+3. **Claim Adjustments**: Reduce risk for supported claims, increase for unsupported
+4. **Rule Overrides**: Apply explicit rules that can override base calculations
+5. **Final Score**: Convert to 0-100 credibility score
+
+**Output**: Credibility score, verdict (Likely Real/Suspicious/Likely Fake), world label, confidence estimate, and complete reasoning path.
 
 ---
 
-### `hawkins_truth_engine/explain.py` — Explanation Generator
+### 💬 `hawkins_truth_engine/explain.py` — Human-Readable Explanation Generator
 
-**Purpose**: Transforms technical outputs into reviewer-friendly explanations.
+**What it does**: Converts technical analysis results into clear, understandable explanations for human reviewers.
+
+**Why it's essential**: Technical scores and evidence items aren't useful without clear explanations. This module makes the system's reasoning transparent and actionable.
+
+**How it works**: Ranks evidence by importance, generates bullet points, and creates explanatory text with acknowledged limitations.
 
 **Generated Components**:
 
-| Component | Description |
-|-----------|-------------|
-| `verdict_text` | "World: X \| Verdict: Y (Z% confidence)" |
-| `evidence_bullets` | Top 6 evidence items ranked by severity/weight |
-| `assumptions` | 2 stated assumptions about methodology |
-| `blind_spots` | 3 acknowledged limitations |
-| `highlighted_spans` | Character positions for UI highlighting |
+| Component | Purpose | Example |
+|-----------|---------|---------|
+| **Verdict Text** | Clear summary with confidence | "World: Upside Down \| Verdict: Suspicious (67% confidence)" |
+| **Evidence Bullets** | Top 6 most important findings | "High severity: Conspiracy phrase detected: 'big pharma'" |
+| **Assumptions** | What the system assumes to be true | "Online evidence providers returned representative results" |
+| **Blind Spots** | Acknowledged limitations | "No guaranteed real-time fact verification" |
+| **Highlighted Spans** | Text positions for UI highlighting | Character positions of detected patterns |
 
-**Output Schema**: `VerdictExplanation`
-```python
-class VerdictExplanation(BaseModel):
-    verdict_text: str
-    evidence_bullets: list[str]
-    assumptions: list[str]
-    blind_spots: list[str]
-    highlighted_spans: list[CharSpan]
-```
+**Evidence Ranking**: Combines severity (high/medium/low), weight (importance), and value (strength) to prioritize the most significant findings.
+
+**Output**: Complete explanation package ready for display to human reviewers.
 
 ---
 
-### `hawkins_truth_engine/app.py` — FastAPI Application
+### 🌐 `hawkins_truth_engine/app.py` — Web Interface & API
 
-**Purpose**: HTTP API and web interface.
+**What it does**: Provides both a web interface and REST API for accessing the truth engine functionality.
+
+**Why it's essential**: Makes the system accessible to users through a simple web form and to developers through a programmatic API.
+
+**Features**:
+- **Web UI**: Simple form for entering content and viewing results
+- **REST API**: JSON endpoint for programmatic access
+- **Auto-documentation**: OpenAPI/Swagger docs at `/docs`
+- **Real-time Analysis**: Processes content and returns results immediately
 
 **Endpoints**:
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/` | GET | Minimal HTML UI with input form |
-| `/analyze` | POST | Main analysis endpoint |
-| `/docs` | GET | OpenAPI documentation (auto-generated) |
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/` | GET | Web interface with input form and results display |
+| `/analyze` | POST | Main analysis API accepting JSON requests |
+| `/docs` | GET | Interactive API documentation |
 
-**UI Features**:
-- Input type selector (raw_text / url / social_post)
-- Content textarea
-- Analyze button
-- Results display: credibility score, world label, verdict, confidence
-- Evidence bullets
-- Full JSON response viewer
-
-**Request Schema**: `AnalyzeRequest`
-```python
-class AnalyzeRequest(BaseModel):
-    input_type: InputType  # raw_text | url | social_post
-    content: str
-```
+**Input Types Supported**:
+- `raw_text`: Direct text content
+- `url`: Web page URL (automatically fetched)
+- `social_post`: Social media content
 
 ---
 
-### `hawkins_truth_engine/schemas.py` — Pydantic Models
+### 📋 `hawkins_truth_engine/schemas.py` — Data Structure Definitions
 
-**Purpose**: Type-safe data models for all inputs/outputs.
+**What it does**: Defines all data structures used throughout the system using Pydantic for type safety and validation.
 
-**Model Categories**:
+**Why it's essential**: Ensures data consistency across modules and provides automatic validation, serialization, and documentation.
 
-| Category | Models |
-|----------|--------|
-| Enums | `InputType`, `Verdict`, `WorldLabel` |
-| Document | `CharSpan`, `Pointer`, `Sentence`, `Token`, `Entity`, `Attribution`, `Document` |
-| Evidence | `EvidenceItem`, `LanguageInfo` |
-| Module Outputs | `LinguisticOutput`, `StatisticalOutput`, `SourceIntelOutput`, `ClaimItem`, `ClaimsOutput` |
-| Reasoning | `ReasoningStep`, `AggregationOutput` |
-| Explanation | `VerdictExplanation` |
-| API | `AnalyzeRequest`, `AnalysisResponse` |
+**Key Model Categories**:
 
----
-
-### `hawkins_truth_engine/config.py` — Configuration Management
-
-**Purpose**: Environment variable configuration with defaults.
-
-**Variables**:
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `HTE_HTTP_TIMEOUT_SECS` | 20 | HTTP request timeout |
-| `HTE_FETCH_MAX_BYTES` | 2,000,000 | Max download size for URLs |
-| `HTE_GDELT_MAXRECORDS` | 25 | Max GDELT search results |
-| `HTE_NCBI_TOOL` | hawkins_truth_engine_poc | NCBI tool identifier |
-| `HTE_NCBI_EMAIL` | (empty) | NCBI contact email |
-| `HTE_NCBI_API_KEY` | (empty) | NCBI API key for higher rate limits |
-| `HTE_PUBMED_RETMAX` | 10 | Max PubMed search results |
-| `HTE_PUBMED_MAX_ABSTRACTS` | 3 | Max abstracts to fetch per claim |
+| Category | Purpose | Key Models |
+|----------|---------|------------|
+| **Core Types** | Basic enums and primitives | `InputType`, `Verdict`, `WorldLabel` |
+| **Document Structure** | Parsed content representation | `Document`, `Sentence`, `Token`, `Entity` |
+| **Evidence System** | Traceability and provenance | `EvidenceItem`, `Pointer`, `CharSpan` |
+| **Analyzer Outputs** | Module-specific results | `LinguisticOutput`, `StatisticalOutput`, etc. |
+| **API Interface** | Request/response formats | `AnalyzeRequest`, `AnalysisResponse` |
 
 ---
 
-### External Service Clients
+### ⚙️ `hawkins_truth_engine/config.py` — Configuration Management
 
-#### `hawkins_truth_engine/external/rdap.py`
+**What it does**: Manages all configurable settings through environment variables with sensible defaults.
 
-**Function**: `rdap_domain(domain: str) -> dict | None`
+**Why it's essential**: Allows customization of timeouts, API limits, and external service parameters without code changes.
 
-Queries RDAP.org for domain registration metadata (creation date, status).
+**Key Configuration Areas**:
 
-#### `hawkins_truth_engine/external/ncbi.py`
+| Setting Type | Purpose | Examples |
+|--------------|---------|----------|
+| **HTTP Settings** | Request timeouts and size limits | `HTE_HTTP_TIMEOUT_SECS`, `HTE_FETCH_MAX_BYTES` |
+| **External APIs** | Service credentials and limits | `HTE_NCBI_EMAIL`, `HTE_GDELT_MAXRECORDS` |
+| **Analysis Tuning** | Search result limits | `HTE_PUBMED_RETMAX`, `HTE_PUBMED_MAX_ABSTRACTS` |
 
-**Functions**:
-- `pubmed_esearch(term, retmax)` — Search PubMed, return PMID list
-- `pubmed_esummary(pmids)` — Fetch metadata for PMIDs
-- `pubmed_efetch_abstract(pmids)` — Fetch plain-text abstracts
+---
 
-#### `hawkins_truth_engine/external/gdelt.py`
+### 🔌 External Service Integrations
 
-**Function**: `gdelt_doc_search(query, maxrecords)` — Search GDELT news archive
+#### `hawkins_truth_engine/external/rdap.py` — Domain Intelligence
+
+**What it does**: Queries RDAP (Registration Data Access Protocol) for domain registration information.
+
+**Why it's needed**: Domain age and status are strong credibility indicators. New domains are often used for misinformation campaigns.
+
+**Key Function**: `rdap_domain(domain)` → Returns registration date, status, and other metadata
+
+#### `hawkins_truth_engine/external/ncbi.py` — Medical Literature Search
+
+**What it does**: Searches PubMed database for biomedical literature to verify health-related claims.
+
+**Why it's needed**: Medical misinformation is particularly dangerous. PubMed provides authoritative scientific sources for verification.
+
+**Key Functions**:
+- `pubmed_esearch(term)` → Search for relevant articles
+- `pubmed_esummary(pmids)` → Get article metadata  
+- `pubmed_efetch_abstract(pmids)` → Fetch full abstracts
+
+#### `hawkins_truth_engine/external/gdelt.py` — News Archive Search
+
+**What it does**: Searches GDELT (Global Database of Events, Language, and Tone) for news coverage of claims.
+
+**Why it's needed**: Cross-referencing claims against established news sources helps verify factual assertions.
+
+**Key Function**: `gdelt_doc_search(query)` → Returns relevant news articles
+
+---
+
+### 🔄 How All Modules Work Together
+
+1. **Input Processing** (`ingest.py`): Converts raw input into structured document
+2. **Parallel Analysis**: Four analyzers examine different aspects simultaneously
+   - `linguistic.py`: Writing patterns
+   - `statistical.py`: Text structure  
+   - `source_intel.py`: Source credibility
+   - `claims.py`: Fact verification
+3. **Decision Making** (`reasoning.py`): Combines evidence using explicit rules
+4. **Explanation** (`explain.py`): Generates human-readable results
+5. **Delivery** (`app.py`): Serves results via web interface or API
+
+Each module is designed to be independent, testable, and explainable, contributing specific evidence to the overall credibility assessment.
 
 ---
 
