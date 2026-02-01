@@ -1,0 +1,39 @@
+[project]
+name = "hawkins-truth-engine"
+version = "0.1.0"
+description = "Explainable, multi-signal credibility reasoning engine (POC)."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+  { name = "Hawkins Truth Engine Contributors" }
+]
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.27",
+  "pydantic>=2.6",
+  "httpx>=0.27",
+  "trafilatura>=1.7",
+  "beautifulsoup4>=4.12",
+  "lxml>=5.1",
+  "langdetect>=1.0.9",
+  "numpy>=1.26",
+  "scikit-learn>=1.4",
+  "rapidfuzz>=3.6",
+]
+
+[project.optional-dependencies]
+nlp = [
+  "spacy>=3.7",
+  "sentence-transformers>=3.0",
+]
+
+[project.scripts]
+hawkins-truth-engine = "hawkins_truth_engine.app:run"
+
+[tool.setuptools]
+packages = ["hawkins_truth_engine", "hawkins_truth_engine.analyzers", "hawkins_truth_engine.external"]
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
