@@ -29,6 +29,12 @@ async def home() -> FileResponse:
     return FileResponse(STATIC_DIR / "index.html")
 
 
+@app.get("/presentation", response_class=HTMLResponse)
+async def presentation() -> FileResponse:
+    """Serve the project presentation/explainer page."""
+    return FileResponse(STATIC_DIR / "presentation.html")
+
+
 @app.post("/analyze", response_model=AnalysisResponse)
 async def analyze(req: AnalyzeRequest) -> AnalysisResponse:
     doc = await build_document(req.input_type, req.content)

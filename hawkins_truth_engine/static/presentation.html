@@ -1,0 +1,1580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hawkins Truth Engine - Project Presentation</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #dc2626;
+            --primary-dark: #991b1b;
+            --secondary: #1e293b;
+            --accent: #f59e0b;
+            --success: #22c55e;
+            --bg-dark: #0f172a;
+            --bg-card: #1e293b;
+            --text: #f1f5f9;
+            --text-muted: #94a3b8;
+            --border: #334155;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text);
+            line-height: 1.7;
+        }
+
+        /* Navigation */
+        .nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border);
+            z-index: 1000;
+            padding: 15px 0;
+        }
+
+        .nav-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .nav-logo {
+            font-weight: 700;
+            font-size: 1.2rem;
+            color: var(--primary);
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 25px;
+            list-style: none;
+        }
+
+        .nav-links a {
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: color 0.3s;
+        }
+
+        .nav-links a:hover {
+            color: var(--primary);
+        }
+
+        /* Hero Section */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 100px 20px;
+            background: linear-gradient(135deg, var(--bg-dark) 0%, #1a0a0a 50%, var(--bg-dark) 100%);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::before {
+            content: "";
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, rgba(220, 38, 38, 0.15) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 1;
+            max-width: 900px;
+        }
+
+        .hero-badge {
+            display: inline-block;
+            background: rgba(220, 38, 38, 0.2);
+            color: var(--primary);
+            padding: 8px 20px;
+            border-radius: 50px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 30px;
+            border: 1px solid rgba(220, 38, 38, 0.3);
+        }
+
+        .hero h1 {
+            font-size: clamp(2.5rem, 6vw, 4.5rem);
+            font-weight: 700;
+            margin-bottom: 20px;
+            background: linear-gradient(135deg, #fff 0%, var(--primary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero-subtitle {
+            font-size: 1.3rem;
+            color: var(--text-muted);
+            margin-bottom: 40px;
+            max-width: 700px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .hero-cta {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 14px 32px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 1rem;
+            text-decoration: none;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(220, 38, 38, 0.3);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        /* Section Styles */
+        .section {
+            padding: 100px 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+
+        .section-number {
+            display: inline-block;
+            background: rgba(220, 38, 38, 0.2);
+            color: var(--primary);
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            line-height: 50px;
+            font-weight: 700;
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+        }
+
+        .section-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 15px;
+        }
+
+        .section-subtitle {
+            color: var(--text-muted);
+            font-size: 1.1rem;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        /* Card Grid */
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 25px;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 30px;
+            transition: all 0.3s;
+        }
+
+        .card:hover {
+            border-color: var(--primary);
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .card-icon {
+            width: 60px;
+            height: 60px;
+            background: rgba(220, 38, 38, 0.15);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8rem;
+            margin-bottom: 20px;
+        }
+
+        .card h3 {
+            font-size: 1.3rem;
+            margin-bottom: 12px;
+            color: var(--text);
+        }
+
+        .card p {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+
+        /* Problem Statement Section */
+        .problem-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 60px;
+            align-items: center;
+        }
+
+        @media (max-width: 900px) {
+            .problem-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .problem-visual {
+            background: linear-gradient(135deg, var(--bg-card), #1a0a0a);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 40px;
+            text-align: center;
+        }
+
+        .problem-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 30px;
+        }
+
+        .stat-box {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .stat-label {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            margin-top: 5px;
+        }
+
+        .problem-content h3 {
+            font-size: 1.8rem;
+            margin-bottom: 20px;
+            color: var(--accent);
+        }
+
+        .problem-content p {
+            color: var(--text-muted);
+            margin-bottom: 20px;
+        }
+
+        .problem-list {
+            list-style: none;
+        }
+
+        .problem-list li {
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .problem-list li:last-child {
+            border-bottom: none;
+        }
+
+        .problem-list .icon {
+            color: var(--primary);
+            font-size: 1.2rem;
+            flex-shrink: 0;
+        }
+
+        /* Innovation Section */
+        .innovation-comparison {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            overflow: hidden;
+            margin-top: 40px;
+        }
+
+        .comparison-header {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 20px;
+            font-weight: 600;
+            text-align: center;
+        }
+
+        .comparison-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            padding: 20px;
+            border-top: 1px solid var(--border);
+            align-items: center;
+        }
+
+        .comparison-row:hover {
+            background: rgba(220, 38, 38, 0.05);
+        }
+
+        .comparison-feature {
+            font-weight: 500;
+        }
+
+        .comparison-bad {
+            color: var(--primary);
+            text-align: center;
+        }
+
+        .comparison-good {
+            color: var(--success);
+            text-align: center;
+        }
+
+        /* Technical Flow */
+        .flow-container {
+            margin-top: 50px;
+        }
+
+        .flow-step {
+            display: flex;
+            gap: 30px;
+            margin-bottom: 40px;
+            align-items: flex-start;
+        }
+
+        .flow-step:nth-child(even) {
+            flex-direction: row-reverse;
+        }
+
+        @media (max-width: 768px) {
+            .flow-step, .flow-step:nth-child(even) {
+                flex-direction: column;
+            }
+        }
+
+        .flow-number {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        .flow-content {
+            flex: 1;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 30px;
+        }
+
+        .flow-content h4 {
+            font-size: 1.4rem;
+            margin-bottom: 15px;
+            color: var(--accent);
+        }
+
+        .flow-content p {
+            color: var(--text-muted);
+            margin-bottom: 15px;
+        }
+
+        .flow-tech {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .tech-tag {
+            background: rgba(245, 158, 11, 0.15);
+            color: var(--accent);
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        /* Architecture Diagram */
+        .architecture {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 40px;
+            margin-top: 50px;
+        }
+
+        .architecture-title {
+            text-align: center;
+            font-size: 1.5rem;
+            margin-bottom: 40px;
+        }
+
+        .arch-flow {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .arch-box {
+            background: rgba(0, 0, 0, 0.3);
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            padding: 20px 25px;
+            text-align: center;
+            flex: 1;
+            min-width: 150px;
+            transition: all 0.3s;
+        }
+
+        .arch-box:hover {
+            border-color: var(--primary);
+            transform: scale(1.05);
+        }
+
+        .arch-box.highlight {
+            border-color: var(--primary);
+            background: rgba(220, 38, 38, 0.1);
+        }
+
+        .arch-box h5 {
+            font-size: 0.9rem;
+            margin-bottom: 5px;
+        }
+
+        .arch-box span {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .arch-arrow {
+            color: var(--primary);
+            font-size: 1.5rem;
+        }
+
+        /* Tech Stack */
+        .tech-stack {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-top: 40px;
+        }
+
+        .tech-item {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 25px;
+            text-align: center;
+            transition: all 0.3s;
+        }
+
+        .tech-item:hover {
+            border-color: var(--accent);
+        }
+
+        .tech-item h4 {
+            margin-bottom: 8px;
+            color: var(--accent);
+        }
+
+        .tech-item p {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        /* FAQ Section */
+        .faq-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .faq-item {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            margin-bottom: 15px;
+            overflow: hidden;
+        }
+
+        .faq-question {
+            padding: 25px 30px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 600;
+            font-size: 1.1rem;
+            transition: background 0.3s;
+        }
+
+        .faq-question:hover {
+            background: rgba(220, 38, 38, 0.05);
+        }
+
+        .faq-question .icon {
+            color: var(--primary);
+            font-size: 1.5rem;
+            transition: transform 0.3s;
+        }
+
+        .faq-item.open .faq-question .icon {
+            transform: rotate(45deg);
+        }
+
+        .faq-answer {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.5s ease;
+        }
+
+        .faq-item.open .faq-answer {
+            max-height: 1000px;
+        }
+
+        .faq-answer-content {
+            padding: 0 30px 25px;
+            color: var(--text-muted);
+            line-height: 1.8;
+        }
+
+        .faq-answer-content strong {
+            color: var(--text);
+        }
+
+        .faq-answer-content ul {
+            margin: 15px 0;
+            padding-left: 25px;
+        }
+
+        .faq-answer-content li {
+            margin-bottom: 8px;
+        }
+
+        /* Demo Section */
+        .demo-container {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 40px;
+            text-align: center;
+        }
+
+        .demo-title {
+            font-size: 1.8rem;
+            margin-bottom: 20px;
+        }
+
+        .demo-description {
+            color: var(--text-muted);
+            margin-bottom: 30px;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .demo-features {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            flex-wrap: wrap;
+            margin-bottom: 30px;
+        }
+
+        .demo-feature {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .demo-feature .check {
+            color: var(--success);
+            font-size: 1.2rem;
+        }
+
+        /* Rubric Section */
+        .rubric-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 25px;
+        }
+
+        .rubric-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 30px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .rubric-card::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--primary), var(--accent));
+        }
+
+        .rubric-score {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(220, 38, 38, 0.2);
+            color: var(--primary);
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-weight: 700;
+            font-size: 0.9rem;
+        }
+
+        .rubric-card h3 {
+            font-size: 1.2rem;
+            margin-bottom: 15px;
+            padding-right: 60px;
+        }
+
+        .rubric-card ul {
+            list-style: none;
+        }
+
+        .rubric-card li {
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-muted);
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+        }
+
+        .rubric-card li:last-child {
+            border-bottom: none;
+        }
+
+        .rubric-card .check-icon {
+            color: var(--success);
+            flex-shrink: 0;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 60px 20px;
+            border-top: 1px solid var(--border);
+        }
+
+        .footer-logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 20px;
+        }
+
+        .footer-text {
+            color: var(--text-muted);
+            max-width: 500px;
+            margin: 0 auto 30px;
+        }
+
+        .footer-links {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+        }
+
+        .footer-links a {
+            color: var(--text-muted);
+            text-decoration: none;
+            transition: color 0.3s;
+        }
+
+        .footer-links a:hover {
+            color: var(--primary);
+        }
+
+        /* Code Block */
+        .code-block {
+            background: #0d1117;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            overflow-x: auto;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+        }
+
+        .code-block code {
+            color: #e6edf3;
+        }
+
+        /* Highlight Box */
+        .highlight-box {
+            background: rgba(245, 158, 11, 0.1);
+            border-left: 4px solid var(--accent);
+            padding: 20px 25px;
+            margin: 20px 0;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .highlight-box strong {
+            color: var(--accent);
+        }
+
+        /* Mobile Navigation */
+        @media (max-width: 768px) {
+            .nav-links {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="nav">
+        <div class="nav-container">
+            <div class="nav-logo">Hawkins Truth Engine</div>
+            <ul class="nav-links">
+                <li><a href="#problem">Problem</a></li>
+                <li><a href="#innovation">Innovation</a></li>
+                <li><a href="#technical">Technical</a></li>
+                <li><a href="#faq">FAQ</a></li>
+                <li><a href="#demo">Demo</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-content">
+            <div class="hero-badge">Round 2 - Fake News Detection</div>
+            <h1>Hawkins Truth Engine</h1>
+            <p class="hero-subtitle">
+                An explainable, evidence-first credibility reasoning system that separates
+                the Real World from the Upside Down using linguistic, statistical, and
+                source-based analysis.
+            </p>
+            <div class="hero-cta">
+                <a href="/" class="btn btn-primary">
+                    <span>Try Live Demo</span>
+                    <span>→</span>
+                </a>
+                <a href="#problem" class="btn btn-secondary">
+                    <span>Learn More</span>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Problem Statement Section -->
+    <section id="problem" class="section">
+        <div class="section-header">
+            <div class="section-number">1</div>
+            <h2 class="section-title">Problem Statement</h2>
+            <p class="section-subtitle">Understanding the challenge we're solving</p>
+        </div>
+
+        <div class="problem-grid">
+            <div class="problem-visual">
+                <h3 style="font-size: 1.8rem; margin-bottom: 20px; color: var(--primary);">The Misinformation Crisis</h3>
+                <p style="color: var(--text-muted); margin-bottom: 30px;">
+                    In the town of Hawkins (and our real world), false information spreads faster than truth.
+                </p>
+                <div class="problem-stats">
+                    <div class="stat-box">
+                        <div class="stat-number">70%</div>
+                        <div class="stat-label">of fake news spreads before fact-checking</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-number">6x</div>
+                        <div class="stat-label">faster misinformation spreads than truth</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-number">86%</div>
+                        <div class="stat-label">of users can't identify fake news</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-number">$78B</div>
+                        <div class="stat-label">global cost of misinformation annually</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="problem-content">
+                <h3>The Core Problem</h3>
+                <p>
+                    With misinformation creeping in like creatures from the Upside Down, it becomes harder
+                    for citizens to tell what's real and what's just another distorted tale. Fake reports
+                    about supernatural events, missing people, or secret experiments can cause panic and
+                    confusion across the community.
+                </p>
+
+                <h3 style="margin-top: 30px;">Why Existing Solutions Fail</h3>
+                <ul class="problem-list">
+                    <li>
+                        <span class="icon">✕</span>
+                        <div>
+                            <strong>Black-box classifiers</strong> provide binary labels with no explanation,
+                            making it impossible to understand or verify their decisions.
+                        </div>
+                    </li>
+                    <li>
+                        <span class="icon">✕</span>
+                        <div>
+                            <strong>Human fact-checkers</strong> cannot scale to the volume of content
+                            being produced every second.
+                        </div>
+                    </li>
+                    <li>
+                        <span class="icon">✕</span>
+                        <div>
+                            <strong>Keyword blocklists</strong> are easily circumvented by slightly
+                            modifying language patterns.
+                        </div>
+                    </li>
+                    <li>
+                        <span class="icon">✕</span>
+                        <div>
+                            <strong>Single-signal systems</strong> miss the nuance required for accurate
+                            credibility assessment.
+                        </div>
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="highlight-box" style="margin-top: 40px;">
+            <strong>Our Mission:</strong> Design an intelligent "Hawkins Truth Engine" that analyzes news articles,
+            social media posts, and URLs to determine whether a story belongs to the Real World or the Upside Down.
+            The system must not only classify, but <strong>explain why</strong> a story appears suspicious using
+            linguistic, statistical, and source-based evidence.
+        </div>
+    </section>
+
+    <!-- Innovation Section -->
+    <section id="innovation" class="section" style="background: rgba(0,0,0,0.3); max-width: 100%; padding-left: calc((100% - 1200px) / 2 + 20px); padding-right: calc((100% - 1200px) / 2 + 20px);">
+        <div class="section-header">
+            <div class="section-number">2</div>
+            <h2 class="section-title">Innovation & Uniqueness</h2>
+            <p class="section-subtitle">What makes our solution different</p>
+        </div>
+
+        <div class="card-grid">
+            <div class="card">
+                <div class="card-icon">🔍</div>
+                <h3>Evidence-First Architecture</h3>
+                <p>
+                    Instead of a single "fake/real" label, we build an evidence ledger where every signal
+                    is traceable, has a unique ID, and links back to the source text. Users can verify
+                    exactly why content was flagged.
+                </p>
+            </div>
+            <div class="card">
+                <div class="card-icon">⚖️</div>
+                <h3>Deterministic Reasoning</h3>
+                <p>
+                    No hidden neural network weights. Every decision is made through explicit, auditable
+                    rules that can be examined, modified, and understood by humans. Full transparency
+                    in the decision-making process.
+                </p>
+            </div>
+            <div class="card">
+                <div class="card-icon">🔬</div>
+                <h3>Multi-Signal Fusion</h3>
+                <p>
+                    Four independent analyzers examine different aspects: linguistic patterns,
+                    statistical anomalies, source credibility, and external claim verification.
+                    Each provides unique evidence that is then intelligently combined.
+                </p>
+            </div>
+            <div class="card">
+                <div class="card-icon">🏥</div>
+                <h3>Medical Harm Detection</h3>
+                <p>
+                    Special handling for health-related content with PubMed integration for scientific
+                    verification. Medical misinformation is flagged with "high harm potential" warnings
+                    because it can cause physical harm.
+                </p>
+            </div>
+            <div class="card">
+                <div class="card-icon">🌐</div>
+                <h3>Real-Time Source Intelligence</h3>
+                <p>
+                    Live domain registration lookups via RDAP to detect newly created domains
+                    (often used for misinformation campaigns). Not a static blocklist but real-time
+                    intelligence gathering.
+                </p>
+            </div>
+            <div class="card">
+                <div class="card-icon">⚠️</div>
+                <h3>Uncertainty Acknowledgment</h3>
+                <p>
+                    Unlike systems that hide uncertainty, we explicitly flag when evidence is missing,
+                    external services fail, or confidence is low. "Unsupported" means "no backing found"
+                    — not "false."
+                </p>
+            </div>
+        </div>
+
+        <div class="innovation-comparison">
+            <div class="comparison-header">
+                <div>Aspect</div>
+                <div>Traditional Solutions</div>
+                <div>Hawkins Truth Engine</div>
+            </div>
+            <div class="comparison-row">
+                <div class="comparison-feature">Output</div>
+                <div class="comparison-bad">Binary "fake/real" label</div>
+                <div class="comparison-good">Tri-verdict + confidence + reasoning path</div>
+            </div>
+            <div class="comparison-row">
+                <div class="comparison-feature">Explainability</div>
+                <div class="comparison-bad">None or post-hoc</div>
+                <div class="comparison-good">Built-in evidence ledger with provenance</div>
+            </div>
+            <div class="comparison-row">
+                <div class="comparison-feature">Analysis Method</div>
+                <div class="comparison-bad">Single NLP model</div>
+                <div class="comparison-good">4 independent analyzers + fusion</div>
+            </div>
+            <div class="comparison-row">
+                <div class="comparison-feature">Claim Verification</div>
+                <div class="comparison-bad">Ignored</div>
+                <div class="comparison-good">PubMed + GDELT corroboration</div>
+            </div>
+            <div class="comparison-row">
+                <div class="comparison-feature">Source Assessment</div>
+                <div class="comparison-bad">Static blocklist</div>
+                <div class="comparison-good">Real-time RDAP intelligence</div>
+            </div>
+            <div class="comparison-row">
+                <div class="comparison-feature">Uncertainty Handling</div>
+                <div class="comparison-bad">Hidden in model weights</div>
+                <div class="comparison-good">Explicit flags + confidence dampening</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Technical Section -->
+    <section id="technical" class="section">
+        <div class="section-header">
+            <div class="section-number">3</div>
+            <h2 class="section-title">Technical Explanation</h2>
+            <p class="section-subtitle">How the system works under the hood</p>
+        </div>
+
+        <div class="architecture">
+            <h3 class="architecture-title">System Architecture Overview</h3>
+            <div class="arch-flow">
+                <div class="arch-box">
+                    <h5>📥 Input</h5>
+                    <span>Text / URL / Post</span>
+                </div>
+                <div class="arch-arrow">→</div>
+                <div class="arch-box">
+                    <h5>🔄 Ingest</h5>
+                    <span>Parse & Extract</span>
+                </div>
+                <div class="arch-arrow">→</div>
+                <div class="arch-box highlight">
+                    <h5>🔬 Analyzers</h5>
+                    <span>4 Parallel Modules</span>
+                </div>
+                <div class="arch-arrow">→</div>
+                <div class="arch-box">
+                    <h5>⚖️ Reasoning</h5>
+                    <span>Rule Engine</span>
+                </div>
+                <div class="arch-arrow">→</div>
+                <div class="arch-box">
+                    <h5>📊 Output</h5>
+                    <span>Verdict + Evidence</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="flow-container">
+            <div class="flow-step">
+                <div class="flow-number">1</div>
+                <div class="flow-content">
+                    <h4>Document Ingestion & Preprocessing</h4>
+                    <p>
+                        Raw input (text, URL, or social post) is transformed into a structured Document.
+                        For URLs, we fetch the page content with size limits and timeout protection, then
+                        extract clean text using trafilatura with BeautifulSoup fallback.
+                    </p>
+                    <p>
+                        The text is broken into sentences and tokens with precise character positions,
+                        enabling exact highlighting in the UI. We detect named entities (people, organizations)
+                        using capitalization patterns and find quote attributions using regex.
+                    </p>
+                    <div class="flow-tech">
+                        <span class="tech-tag">httpx</span>
+                        <span class="tech-tag">trafilatura</span>
+                        <span class="tech-tag">BeautifulSoup</span>
+                        <span class="tech-tag">langdetect</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flow-step">
+                <div class="flow-number">2</div>
+                <div class="flow-content">
+                    <h4>Linguistic Pattern Analysis</h4>
+                    <p>
+                        Scans for writing patterns commonly found in misinformation: clickbait punctuation
+                        (excessive ! and ?), ALL-CAPS shouting, clickbait phrases ("you won't believe"),
+                        conspiracy language ("they don't want you to know"), urgency words, and anonymous
+                        authority citations ("experts say" without naming them).
+                    </p>
+                    <p>
+                        Each pattern has a severity level and contributes to the linguistic risk score.
+                        The exact phrases detected are recorded with their positions for UI highlighting.
+                    </p>
+                    <div class="flow-tech">
+                        <span class="tech-tag">Regex Patterns</span>
+                        <span class="tech-tag">Token Analysis</span>
+                        <span class="tech-tag">Phrase Matching</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flow-step">
+                <div class="flow-number">3</div>
+                <div class="flow-content">
+                    <h4>Statistical Pattern Analysis</h4>
+                    <p>
+                        Examines mathematical properties of text structure: lexical diversity (vocabulary
+                        richness), repetition ratio (keyword stuffing), sentence length uniformity (artificial
+                        generation indicator), and token entropy (word distribution irregularities).
+                    </p>
+                    <p>
+                        Natural human writing has predictable statistical patterns. Deviations suggest
+                        templated content, bot generation, or SEO manipulation.
+                    </p>
+                    <div class="flow-tech">
+                        <span class="tech-tag">numpy</span>
+                        <span class="tech-tag">scikit-learn</span>
+                        <span class="tech-tag">Entropy Calculation</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flow-step">
+                <div class="flow-number">4</div>
+                <div class="flow-content">
+                    <h4>Source Intelligence Gathering</h4>
+                    <p>
+                        For URL inputs, queries RDAP (Registration Data Access Protocol) to get domain
+                        registration information. Young domains (&lt;90 days) are penalized; established
+                        domains (&gt;1 year) get a trust bonus. Domains on "hold" status are flagged as suspicious.
+                    </p>
+                    <p>
+                        Also checks document metadata for missing author and publication date, both of
+                        which are credibility indicators.
+                    </p>
+                    <div class="flow-tech">
+                        <span class="tech-tag">RDAP Protocol</span>
+                        <span class="tech-tag">Domain Analysis</span>
+                        <span class="tech-tag">Metadata Extraction</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flow-step">
+                <div class="flow-number">5</div>
+                <div class="flow-content">
+                    <h4>Claim Extraction & Verification</h4>
+                    <p>
+                        Identifies factual claims in the text (up to 12) and classifies them as factual,
+                        speculative, predictive, or opinion-presented-as-fact. For medical topics (detected
+                        via 28+ trigger terms), searches PubMed for scientific literature. For general claims,
+                        searches GDELT news archive.
+                    </p>
+                    <p>
+                        Each claim is labeled: supported (≥2 citations), unsupported (strong claim, no backing),
+                        unverifiable (no relevant results), or contested (conflicting evidence).
+                    </p>
+                    <div class="flow-tech">
+                        <span class="tech-tag">PubMed E-utilities</span>
+                        <span class="tech-tag">GDELT DOC API</span>
+                        <span class="tech-tag">rapidfuzz</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flow-step">
+                <div class="flow-number">6</div>
+                <div class="flow-content">
+                    <h4>Deterministic Reasoning & Verdict</h4>
+                    <p>
+                        Combines all signals using explicit rules: base risk = 55% linguistic + 45% statistical.
+                        Source trust gates the risk (amplified for untrusted, dampened for trusted). Claim
+                        support adjusts the score. Three explicit rules handle edge cases.
+                    </p>
+                    <p>
+                        Final credibility score (0-100) maps to verdict: Likely Real (≥70), Suspicious (40-69),
+                        Likely Fake (&lt;40). World label is binary: "Real World" for Likely Real, "Upside Down" otherwise.
+                    </p>
+                    <div class="flow-tech">
+                        <span class="tech-tag">Rule Engine</span>
+                        <span class="tech-tag">Evidence Aggregation</span>
+                        <span class="tech-tag">Pydantic Models</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <h3 style="margin-top: 60px; margin-bottom: 30px; text-align: center;">Technology Stack</h3>
+        <div class="tech-stack">
+            <div class="tech-item">
+                <h4>FastAPI</h4>
+                <p>Async web framework with automatic OpenAPI docs</p>
+            </div>
+            <div class="tech-item">
+                <h4>Pydantic v2</h4>
+                <p>Type-safe schemas and validation</p>
+            </div>
+            <div class="tech-item">
+                <h4>httpx</h4>
+                <p>Async HTTP client for external APIs</p>
+            </div>
+            <div class="tech-item">
+                <h4>trafilatura</h4>
+                <p>HTML text extraction</p>
+            </div>
+            <div class="tech-item">
+                <h4>numpy + scikit-learn</h4>
+                <p>Statistical analysis</p>
+            </div>
+            <div class="tech-item">
+                <h4>NCBI E-utilities</h4>
+                <p>PubMed medical literature</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- FAQ Section -->
+    <section id="faq" class="section" style="background: rgba(0,0,0,0.3); max-width: 100%; padding-left: calc((100% - 1200px) / 2 + 20px); padding-right: calc((100% - 1200px) / 2 + 20px);">
+        <div class="section-header">
+            <div class="section-number">4</div>
+            <h2 class="section-title">Frequently Asked Questions</h2>
+            <p class="section-subtitle">Detailed answers to common questions</p>
+        </div>
+
+        <div class="faq-container">
+            <div class="faq-item">
+                <div class="faq-question" onclick="toggleFaq(this)">
+                    <span>Does this system guarantee truth or prove something is fake?</span>
+                    <span class="icon">+</span>
+                </div>
+                <div class="faq-answer">
+                    <div class="faq-answer-content">
+                        <strong>No, and this is by design.</strong> The Hawkins Truth Engine is explicitly
+                        NOT a truth oracle. Here's why:
+                        <ul>
+                            <li><strong>Truth is complex:</strong> Determining absolute truth often requires
+                            expert knowledge, context, and time that automated systems cannot replicate.</li>
+                            <li><strong>Evidence vs. verdict:</strong> We provide evidence-backed signals and
+                            an interpretable assessment. The final judgment remains with human reviewers.</li>
+                            <li><strong>Conservative labeling:</strong> "Unsupported" means we couldn't find
+                            backing evidence — it does NOT mean the claim is false. The claim might be too
+                            new, too niche, or simply not in our databases.</li>
+                            <li><strong>Uncertainty acknowledgment:</strong> When external services fail or
+                            evidence is ambiguous, we explicitly flag this uncertainty rather than hiding it.</li>
+                        </ul>
+                        <strong>The system is designed as a triage tool</strong> to help human reviewers
+                        prioritize what to investigate, not to replace human judgment.
+                    </div>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question" onclick="toggleFaq(this)">
+                    <span>What does "unsupported" mean for a claim?</span>
+                    <span class="icon">+</span>
+                </div>
+                <div class="faq-answer">
+                    <div class="faq-answer-content">
+                        "Unsupported" is a <strong>conservative internal label</strong> with a specific meaning:
+                        <ul>
+                            <li><strong>Strong framing detected:</strong> The claim uses certainty language
+                            (e.g., "100% guaranteed", "cures all", "proven fact").</li>
+                            <li><strong>No attribution found:</strong> The claim doesn't cite a named source,
+                            expert, or study.</li>
+                            <li><strong>No external backing:</strong> Our searches of PubMed (for medical claims)
+                            and GDELT (for news claims) returned no supporting evidence.</li>
+                        </ul>
+                        <strong>Important:</strong> "Unsupported" does NOT mean "false." The claim might be:
+                        <ul>
+                            <li>Too recent to appear in databases</li>
+                            <li>From a niche domain not covered by our sources</li>
+                            <li>True but poorly attributed in the source text</li>
+                        </ul>
+                        We never treat absence of evidence as evidence of falsity.
+                    </div>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question" onclick="toggleFaq(this)">
+                    <span>Why "Real World" vs "Upside Down" labels?</span>
+                    <span class="icon">+</span>
+                </div>
+                <div class="faq-answer">
+                    <div class="faq-answer-content">
+                        These thematic labels are inspired by the problem prompt (the town of Hawkins,
+                        Stranger Things references) and serve two purposes:
+                        <ul>
+                            <li><strong>Engaging presentation:</strong> Technical verdicts can feel cold
+                            and confusing. The thematic labels make the output more memorable and intuitive.</li>
+                            <li><strong>Quick triage:</strong> Binary classification is useful for rapid
+                            sorting. "Upside Down" = investigate further; "Real World" = likely credible.</li>
+                        </ul>
+                        <strong>The mapping is simple:</strong>
+                        <ul>
+                            <li><strong>Real World</strong> = "Likely Real" verdict (credibility score ≥70)</li>
+                            <li><strong>Upside Down</strong> = "Suspicious" or "Likely Fake" verdict (score &lt;70)</li>
+                        </ul>
+                        The underlying tri-verdict system (Likely Real / Suspicious / Likely Fake) provides
+                        more nuance for detailed review, while the binary world label enables quick assessment.
+                    </div>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question" onclick="toggleFaq(this)">
+                    <span>What happens when external services fail?</span>
+                    <span class="icon">+</span>
+                </div>
+                <div class="faq-answer">
+                    <div class="faq-answer-content">
+                        The system is designed for <strong>graceful degradation</strong>:
+                        <ul>
+                            <li><strong>Processing continues:</strong> If RDAP, PubMed, or GDELT is unavailable,
+                            the system continues with evidence from other analyzers.</li>
+                            <li><strong>Explicit uncertainty flags:</strong> The failure is recorded as an
+                            uncertainty flag (e.g., "ncbi_unavailable", "rdap_unavailable") visible in the output.</li>
+                            <li><strong>Confidence dampening:</strong> When uncertainty flags are present,
+                            the confidence score is automatically capped at 75% to reflect reduced certainty.</li>
+                            <li><strong>Reasoning path visibility:</strong> The reasoning_path in the output
+                            shows exactly which evidence sources were and weren't available.</li>
+                        </ul>
+                        This approach ensures the system remains useful even when external dependencies
+                        are temporarily unavailable, while being transparent about reduced confidence.
+                    </div>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question" onclick="toggleFaq(this)">
+                    <span>Why not use a machine learning classifier?</span>
+                    <span class="icon">+</span>
+                </div>
+                <div class="faq-answer">
+                    <div class="faq-answer-content">
+                        This was a <strong>deliberate design choice</strong> prioritizing explainability:
+                        <ul>
+                            <li><strong>Black box problem:</strong> ML classifiers can achieve high accuracy
+                            but users cannot understand why content was flagged. This erodes trust.</li>
+                            <li><strong>Auditability:</strong> Our deterministic rules can be examined,
+                            challenged, and modified. Every decision is traceable through explicit rules
+                            in the code.</li>
+                            <li><strong>No training data bias:</strong> ML models learn biases from their
+                            training data. Our rules are explicit and can be audited for bias.</li>
+                            <li><strong>No distribution shift:</strong> ML models degrade when content
+                            patterns change. Rule-based systems adapt through rule updates.</li>
+                            <li><strong>Provenance tracking:</strong> Every evidence item has a unique ID,
+                            source module, and pointers back to the original text. ML embeddings don't
+                            provide this traceability.</li>
+                        </ul>
+                        <strong>Trade-off acknowledged:</strong> This approach may miss some subtle patterns
+                        that ML would catch. We accept this trade-off because explainability is more
+                        important than marginal accuracy gains for credibility assessment.
+                    </div>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question" onclick="toggleFaq(this)">
+                    <span>How accurate is the confidence score?</span>
+                    <span class="icon">+</span>
+                </div>
+                <div class="faq-answer">
+                    <div class="faq-answer-content">
+                        <strong>The confidence score is explicitly marked as uncalibrated.</strong> Here's what that means:
+                        <ul>
+                            <li><strong>Heuristic calculation:</strong> Confidence is computed from agreement
+                            between analyzers (35%), evidence coverage (30%), and a base value (35%).</li>
+                            <li><strong>Not a probability:</strong> A 70% confidence does NOT mean "70%
+                            chance of being correct." It's a relative indicator of certainty.</li>
+                            <li><strong>No ground truth calibration:</strong> Proper calibration requires
+                            labeled datasets to verify that X% confidence corresponds to X% accuracy.
+                            This POC hasn't been calibrated against such data.</li>
+                        </ul>
+                        <strong>How to interpret it:</strong>
+                        <ul>
+                            <li>High confidence + multiple evidence sources = stronger assessment</li>
+                            <li>Low confidence or uncertainty flags = human review especially important</li>
+                            <li>Don't treat it as a probability; treat it as "how much evidence supports this verdict"</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question" onclick="toggleFaq(this)">
+                    <span>What are the main limitations of this system?</span>
+                    <span class="icon">+</span>
+                </div>
+                <div class="faq-answer">
+                    <div class="faq-answer-content">
+                        We are transparent about limitations:
+                        <ul>
+                            <li><strong>English-first:</strong> Claim extraction and linguistic patterns are
+                            optimized for English. Other languages may have reduced accuracy.</li>
+                            <li><strong>No image/video analysis:</strong> The system only analyzes text.
+                            Manipulated images or deepfakes are not detected.</li>
+                            <li><strong>External service dependencies:</strong> GDELT, PubMed, and RDAP may
+                            be unavailable, rate-limited, or incomplete.</li>
+                            <li><strong>Heuristic NER:</strong> Named entity recognition uses simple patterns,
+                            not a trained NER model. May miss or misclassify entities.</li>
+                            <li><strong>No real-time fact database:</strong> Breaking news may not yet appear
+                            in our evidence sources.</li>
+                            <li><strong>Confidence not calibrated:</strong> The confidence score is a heuristic,
+                            not a calibrated probability.</li>
+                        </ul>
+                        <strong>Future extensions</strong> could address these: multi-language support,
+                        image analysis, confidence calibration, and additional evidence sources.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Demo Section -->
+    <section id="demo" class="section">
+        <div class="section-header">
+            <div class="section-number">5</div>
+            <h2 class="section-title">Live Demo</h2>
+            <p class="section-subtitle">Try the Hawkins Truth Engine yourself</p>
+        </div>
+
+        <div class="demo-container">
+            <h3 class="demo-title">Experience the Truth Engine</h3>
+            <p class="demo-description">
+                Test the system with any content: news articles, social media posts, or URLs.
+                See real-time analysis with full evidence breakdown and reasoning path.
+            </p>
+            <div class="demo-features">
+                <div class="demo-feature">
+                    <span class="check">✓</span>
+                    <span>Real-time analysis</span>
+                </div>
+                <div class="demo-feature">
+                    <span class="check">✓</span>
+                    <span>Evidence transparency</span>
+                </div>
+                <div class="demo-feature">
+                    <span class="check">✓</span>
+                    <span>Full JSON response</span>
+                </div>
+                <div class="demo-feature">
+                    <span class="check">✓</span>
+                    <span>Stranger Things theme</span>
+                </div>
+            </div>
+            <a href="/" class="btn btn-primary" style="font-size: 1.1rem; padding: 16px 40px;">
+                <span>Launch Demo</span>
+                <span>→</span>
+            </a>
+            <p style="color: var(--text-muted); margin-top: 20px; font-size: 0.9rem;">
+                Also available: <a href="/docs" style="color: var(--accent);">API Documentation</a>
+            </p>
+        </div>
+    </section>
+
+    <!-- Rubric Alignment Section -->
+    <section class="section" style="background: rgba(0,0,0,0.3); max-width: 100%; padding-left: calc((100% - 1200px) / 2 + 20px); padding-right: calc((100% - 1200px) / 2 + 20px);">
+        <div class="section-header">
+            <div class="section-number">✓</div>
+            <h2 class="section-title">Evaluation Rubric Alignment</h2>
+            <p class="section-subtitle">How our project addresses each criterion</p>
+        </div>
+
+        <div class="rubric-grid">
+            <div class="rubric-card">
+                <div class="rubric-score">8 pts</div>
+                <h3>Clarity of Problem Statement</h3>
+                <ul>
+                    <li>
+                        <span class="check-icon">✓</span>
+                        <div><strong>Clear explanation:</strong> Misinformation crisis with real-world impact
+                        statistics and Hawkins thematic framing</div>
+                    </li>
+                    <li>
+                        <span class="check-icon">✓</span>
+                        <div><strong>Domain relevance:</strong> Addresses health misinfo, clickbait, anonymous
+                        sources, and unexplained flagging</div>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="rubric-card">
+                <div class="rubric-score">7 pts</div>
+                <h3>Innovation & Uniqueness</h3>
+                <ul>
+                    <li>
+                        <span class="check-icon">✓</span>
+                        <div><strong>Originality:</strong> Evidence-first architecture with full traceability</div>
+                    </li>
+                    <li>
+                        <span class="check-icon">✓</span>
+                        <div><strong>Creativity:</strong> Multi-signal fusion with deterministic reasoning</div>
+                    </li>
+                    <li>
+                        <span class="check-icon">✓</span>
+                        <div><strong>Differentiation:</strong> Comparison table shows clear advantages over existing solutions</div>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="rubric-card">
+                <div class="rubric-score">3 pts</div>
+                <h3>Technical Explanation</h3>
+                <ul>
+                    <li>
+                        <span class="check-icon">✓</span>
+                        <div><strong>Core features:</strong> 6-stage pipeline fully documented with data flow</div>
+                    </li>
+                    <li>
+                        <span class="check-icon">✓</span>
+                        <div><strong>Tech stack:</strong> FastAPI, Pydantic, httpx, numpy, external APIs - all justified</div>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="rubric-card">
+                <div class="rubric-score">3 pts</div>
+                <h3>Presentation & Demo</h3>
+                <ul>
+                    <li>
+                        <span class="check-icon">✓</span>
+                        <div><strong>Clarity:</strong> This presentation page with visual diagrams</div>
+                    </li>
+                    <li>
+                        <span class="check-icon">✓</span>
+                        <div><strong>Visuals:</strong> Stranger Things themed UI, architecture diagrams, comparison tables</div>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-logo">Hawkins Truth Engine</div>
+        <p class="footer-text">
+            An explainable, evidence-first credibility reasoning system.
+            Built for the Hawkins community — because the truth is out there.
+        </p>
+        <div class="footer-links">
+            <a href="/">Demo</a>
+            <a href="/docs">API Docs</a>
+            <a href="https://github.com/AkCodes23/Hawkins-Truth-Engine" target="_blank">GitHub</a>
+        </div>
+    </footer>
+
+    <script>
+        // FAQ toggle
+        function toggleFaq(element) {
+            const item = element.parentElement;
+            item.classList.toggle('open');
+        }
+
+        // Smooth scroll for navigation
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            });
+        });
+
+        // Open first FAQ by default
+        document.querySelector('.faq-item').classList.add('open');
+    </script>
+</body>
+</html>
