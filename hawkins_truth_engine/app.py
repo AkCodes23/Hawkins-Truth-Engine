@@ -1,14 +1,12 @@
-from __future__ import annotations
-
 import asyncio
 import logging
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal, Union
 from uuid import uuid4
 
-from fastapi import FastAPI, Query, HTTPException, Request
+from fastapi import FastAPI, Query, HTTPException, Request, Body
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -159,7 +157,7 @@ async def test_apis() -> APITestResponse:
 
 @app.post("/analyze", response_model=AnalysisResponse)
 @limiter.limit("30/minute")
-async def analyze(request: Request, req: AnalyzeRequest) -> AnalysisResponse:
+async def analyze(request: Request, req: Annotated[AnalyzeRequest, Body()]) -> AnalysisResponse:
     """Analyze content for credibility and misinformation."""
     request_id = str(uuid4())
     start_time = time.time()
@@ -278,7 +276,7 @@ class GraphMetricsResponse(BaseModel):
 
 @app.post("/graphs/export", response_model=GraphExportResponse)
 @limiter.limit("100/minute")
-async def export_graphs(request: Request, req: GraphExportRequest) -> GraphExportResponse:
+async def export_graphs(request: Request, req: Annotated[GraphExportRequest, Body()]) -> GraphExportResponse:
     """Export graphs in various formats (JSON, GraphML, DOT)."""
     claim_export = None
     evidence_export = None
@@ -304,7 +302,7 @@ class GraphMetricsRequest(BaseModel):
 
 @app.post("/graphs/metrics", response_model=GraphMetricsResponse)
 @limiter.limit("100/minute")
-async def calculate_graph_metrics(request: Request, req: GraphMetricsRequest) -> GraphMetricsResponse:
+async def calculate_graph_metrics(request: Request, req: Annotated[GraphMetricsRequest, Body()]) -> GraphMetricsResponse:
     """Calculate centrality and density metrics for graphs."""
     claim_metrics = None
     evidence_metrics = None
@@ -403,7 +401,7 @@ async def get_calibration_status(request: Request) -> CalibrationStatusResponse:
 
 @app.post("/calibration/calibrate", response_model=CalibrateConfidenceResponse)
 @limiter.limit("50/minute")
-async def calibrate_confidence(request: Request, req: CalibrateConfidenceRequest) -> CalibrateConfidenceResponse:
+async def calibrate_confidence(request: Request, req: Annotated[CalibrateConfidenceRequest, Body()]) -> CalibrateConfidenceResponse:
     """Apply calibration to a heuristic confidence score."""
     try:
         from .calibration.model import ConfidenceCalibrator

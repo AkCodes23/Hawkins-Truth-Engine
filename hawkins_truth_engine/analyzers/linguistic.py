@@ -71,7 +71,12 @@ def analyze_linguistic(doc) -> LinguisticOutput:
                 weight=0.10,
                 value=punct_score,
                 severity="medium" if punct_score < 0.6 else "high",
-                evidence=f"High punctuation intensity (!/? count    if caps_score > caps_threshold:
+                evidence=f"High punctuation intensity (!/{qmarks}? count).",
+                pointers=Pointer(char_spans=[]),
+                provenance={"exclamation": exclam, "question": qmarks, "threshold": punct_threshold},
+            )
+        )
+    if caps_score > caps_threshold:
         signals.append(
             EvidenceItem(
                 id="clickbait_caps",

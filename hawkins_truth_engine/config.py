@@ -1,6 +1,17 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
+
+# Load .env file if it exists (for local development)
+try:
+    from dotenv import load_dotenv
+    # Look for .env in project root
+    env_path = Path(__file__).parent.parent / ".env"
+    if env_path.exists():
+        load_dotenv(env_path)
+except ImportError:
+    pass  # python-dotenv not installed, skip loading .env
 
 
 def env_str(name: str, default: str = "") -> str:
@@ -48,6 +59,12 @@ GDELT_MAXRECORDS = env_int("HTE_GDELT_MAXRECORDS", 25)
 TAVILY_API_KEY = env_str("HTE_TAVILY_API_KEY", "")
 TAVILY_MAX_RESULTS = env_int("HTE_TAVILY_MAX_RESULTS", 5)
 TAVILY_SEARCH_DEPTH = env_str("HTE_TAVILY_SEARCH_DEPTH", "basic")
+
+# Groq LLM settings (for intelligent claim extraction/analysis)
+GROQ_API_KEY = env_str("HTE_GROQ_API_KEY", "")
+GROQ_MODEL = env_str("HTE_GROQ_MODEL", "llama-3.3-70b-versatile")
+GROQ_MAX_TOKENS = env_int("HTE_GROQ_MAX_TOKENS", 2048)
+GROQ_TEMPERATURE = env_float("HTE_GROQ_TEMPERATURE", 0.1)
 
 # ============================================================================
 # Reasoning Engine Thresholds

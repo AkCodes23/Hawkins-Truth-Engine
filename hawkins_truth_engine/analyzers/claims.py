@@ -6,10 +6,11 @@ from typing import Literal
 
 from rapidfuzz import fuzz
 
-from ..config import PUBMED_MAX_ABSTRACTS, TAVILY_API_KEY
+from ..config import GROQ_API_KEY, PUBMED_MAX_ABSTRACTS, TAVILY_API_KEY
 
 logger = logging.getLogger(__name__)
 from ..external.gdelt import gdelt_doc_search
+from ..external.groq import extract_claims_with_llm, is_groq_available
 from ..external.ncbi import pubmed_efetch_abstract, pubmed_esearch, pubmed_esummary
 from ..external.tavily import tavily_search
 from ..schemas import ClaimItem, ClaimsOutput, Pointer
@@ -60,6 +61,38 @@ def _claim_candidates(sentences: list[str]) -> list[str]:
     return cands[:12]
 
 
+async def _claim_candidates_llm(doc) -> tuple[list[dict], list[str]]:
+    """
+    Extract claims using Groq LLM for more intelligent extraction.
+    
+    Args:
+        doc: Document object with display_text and sentences
+        
+    Returns:
+        Tuple of (list of claim dicts from LLM, list of risk indicators)
+    """
+    if not is_groq_available():
+        return [], []
+    
+    try:
+        sentences = [s.text for s in doc.sentences]
+        result = await extract_claims_with_llm(doc.display_text, sentences)
+        
+        if result.get("error"):
+            logger.warning(f"LLM claim extraction failed: {result['error']}")
+            return [], []
+        
+        claims = result.get("claims", [])
+        risk_indicators = result.get("risk_indicators", [])
+        
+        logger.info(f"LLM extracted {len(claims)} claims")
+        return claims, risk_indicators
+        
+    except Exception as e:
+        logger.warning(f"LLM claim extraction error: {type(e).__name__}: {e}")
+        return [], []
+
+
 ClaimType = Literal["factual", "speculative", "predictive", "opinion_presented_as_fact"]
 
 
@@ -84,6 +117,7 @@ def _snippet_relevance(snippet: str, claim: str) -> float:
 
 
 async def _pubmed_evidence_for_claim(claim: str) -> dict:
+    """Fetch PubMed citations that may support or refute a claim."""
     # Query: use claim text directly; in a full system we'd construct fielded queries.
     out: dict = {
         "citations": [],
@@ -94,6 +128,13 @@ async def _pubmed_evidence_for_claim(claim: str) -> dict:
     term = claim
     try:
         sr = await pubmed_esearch(term=term)
+        
+        # Check if the API returned an error
+        if "error" in sr:
+            out["uncertainty_flags"].append("ncbi_unavailable")
+            out["query_trace"].append({"provider": "ncbi", "error": sr["error"]})
+            return out
+        
         pmids = (sr.get("data") or {}).get("esearchresult", {}).get("idlist", [])
         out["query_trace"].append(
             {
@@ -107,6 +148,13 @@ async def _pubmed_evidence_for_claim(claim: str) -> dict:
             return out
         pmids = pmids[:PUBMED_MAX_ABSTRACTS]
         summ = await pubmed_esummary(pmids)
+        
+        # Check if esummary returned an error
+        if "error" in summ:
+            out["uncertainty_flags"].append("ncbi_esummary_failed")
+            out["query_trace"].append({"provider": "ncbi", "error": summ["error"]})
+            return out
+        
         sum_data = (summ.get("data") or {}).get("result", {})
         for pmid in pmids:
             item = sum_data.get(str(pmid), {})
@@ -119,21 +167,26 @@ async def _pubmed_evidence_for_claim(claim: str) -> dict:
             # POC: fetch abstracts per PMID to avoid mis-associating text.
             try:
                 abs_one = await pubmed_efetch_abstract([str(pmid)])
-                out["query_trace"].append(
-                    {
-                        "provider": "ncbi",
-                        "db": "pubmed",
-                        "pmid": str(pmid),
-                        "efetch_url": abs_one["request"]["url"],
-                    }
-                )
-                abs_text = (abs_one.get("data") or "").strip()
-                lines = [ln.strip() for ln in abs_text.split("\n") if ln.strip()]
-                for ln in lines:
-                    if _snippet_relevance(ln, claim) >= 0.25:
-                        snippets.append(ln)
-                    if len(snippets) >= 3:
-                        break
+                
+                # Check if efetch returned an error
+                if "error" in abs_one:
+                    out["uncertainty_flags"].append("pubmed_abstract_fetch_failed")
+                else:
+                    out["query_trace"].append(
+                        {
+                            "provider": "ncbi",
+                            "db": "pubmed",
+                            "pmid": str(pmid),
+                            "efetch_url": abs_one["request"].get("url", ""),
+                        }
+                    )
+                    abs_text = (abs_one.get("data") or "").strip()
+                    lines = [ln.strip() for ln in abs_text.split("\n") if ln.strip()]
+                    for ln in lines:
+                        if _snippet_relevance(ln, claim) >= 0.25:
+                            snippets.append(ln)
+                        if len(snippets) >= 3:
+                            break
             except Exception:
                 out["uncertainty_flags"].append("pubmed_abstract_fetch_failed")
             out["citations"].append(
@@ -154,12 +207,20 @@ async def _pubmed_evidence_for_claim(claim: str) -> dict:
 
 
 async def _gdelt_evidence_for_claim(claim: str) -> dict:
+    """Fetch GDELT news corroboration for a claim."""
     out: dict = {"neighbors": [], "query_trace": [], "uncertainty_flags": []}
     try:
         r = await gdelt_doc_search(query=claim, maxrecords=10)
+        
+        # Check if the API returned an error
+        if "error" in r:
+            out["uncertainty_flags"].append("gdelt_unavailable")
+            out["query_trace"].append({"provider": "gdelt", "error": r["error"]})
+            return out
+        
         articles = (r.get("data") or {}).get("articles") or []
         out["query_trace"].append(
-            {"provider": "gdelt", "url": r["request"]["url"], "count": len(articles)}
+            {"provider": "gdelt", "url": r["request"].get("url", ""), "count": len(articles)}
         )
         for a in articles[:5]:
             out["neighbors"].append(
@@ -177,16 +238,24 @@ async def _gdelt_evidence_for_claim(claim: str) -> dict:
 
 
 async def _tavily_evidence_for_claim(claim: str) -> dict:
+    """Fetch Tavily web search corroboration for a claim."""
     out: dict = {"neighbors": [], "query_trace": [], "uncertainty_flags": []}
     if not TAVILY_API_KEY:
         return out
     try:
         r = await tavily_search(query=claim)
+        
+        # Check if the API returned an error
+        if "error" in r:
+            out["uncertainty_flags"].append("tavily_unavailable")
+            out["query_trace"].append({"provider": "tavily", "error": r["error"]})
+            return out
+        
         results = (r.get("data") or {}).get("results") or []
         out["query_trace"].append(
             {
                 "provider": "tavily",
-                "endpoint": r["request"]["endpoint"],
+                "endpoint": r["request"].get("endpoint", ""),
                 "count": len(results),
             }
         )
@@ -242,12 +311,53 @@ def _deduplicate_claims(candidates: list[str], threshold: float = 0.85) -> list[
 
 
 async def analyze_claims(doc) -> ClaimsOutput:
+    """
+    Analyze document for factual claims using LLM (if available) or heuristics.
+    
+    Args:
+        doc: Document object with sentences and display_text
+        
+    Returns:
+        ClaimsOutput with extracted and analyzed claims
+    """
     triggers = _medical_topic_triggers(doc.display_text)
     medical = bool(triggers)
     # Aggregate provider uncertainty across claim items for easier UI surfacing.
     uncertainty_flags: list[str] = []
+    llm_risk_indicators: list[str] = []
 
-    candidates = _claim_candidates([s.text for s in doc.sentences])
+    # Try LLM-based claim extraction first (more intelligent)
+    llm_claims, llm_risk_indicators = await _claim_candidates_llm(doc)
+    
+    if llm_claims:
+        # Use LLM-extracted claims
+        candidates = []
+        llm_claim_metadata = {}  # Store LLM metadata for each claim
+        
+        for llm_claim in llm_claims:
+            claim_text = llm_claim.get("text", "").strip()
+            if claim_text and len(claim_text) >= 20:
+                candidates.append(claim_text)
+                llm_claim_metadata[claim_text] = {
+                    "type": llm_claim.get("type", "factual"),
+                    "verifiable": llm_claim.get("verifiable", True),
+                    "topics": llm_claim.get("topics", []),
+                    "confidence": llm_claim.get("confidence", 0.5),
+                }
+        
+        logger.info(f"Using {len(candidates)} LLM-extracted claims")
+        
+        # Add LLM risk indicators to uncertainty flags
+        if llm_risk_indicators:
+            for indicator in llm_risk_indicators:
+                if indicator and f"llm_risk:{indicator}" not in uncertainty_flags:
+                    uncertainty_flags.append(f"llm_risk:{indicator}")
+    else:
+        # Fallback to heuristic claim extraction
+        candidates = _claim_candidates([s.text for s in doc.sentences])
+        llm_claim_metadata = {}
+        logger.info(f"Using {len(candidates)} heuristic-extracted claims (LLM unavailable)")
+    
     # Deduplicate claims before processing
     candidates = _deduplicate_claims(candidates, threshold=0.85)
     claim_items: list[ClaimItem] = []
@@ -257,7 +367,22 @@ async def analyze_claims(doc) -> ClaimsOutput:
 
     for idx, c in enumerate(candidates):
         cid = f"C{idx + 1}"
-        ctype = _claim_type(c)
+        
+        # Use LLM type if available, otherwise use heuristic
+        if c in llm_claim_metadata:
+            llm_meta = llm_claim_metadata[c]
+            llm_type = llm_meta.get("type", "factual")
+            # Map LLM type to our types
+            type_map = {
+                "factual": "factual",
+                "speculative": "speculative", 
+                "predictive": "predictive",
+                "opinion": "opinion_presented_as_fact",
+            }
+            ctype = type_map.get(llm_type, "factual")
+        else:
+            ctype = _claim_type(c)
+        
         pointers = Pointer(
             char_spans=find_spans(doc.display_text, c[: min(len(c), 80)], max_spans=1)
         )

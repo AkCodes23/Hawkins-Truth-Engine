@@ -30,7 +30,7 @@ class EvidenceItem(BaseModel):
     severity: Literal["low", "medium", "high"]
     evidence: str
     pointers: Pointer = Field(default_factory=Pointer)
-    provenance: dict[str, str | float | int | bool] = Field(default_factory=dict)
+    provenance: dict[str, Any] = Field(default_factory=dict)
 
 
 class LanguageInfo(BaseModel):
@@ -84,7 +84,7 @@ class Document(BaseModel):
     entities: list[Entity]
     attributions: list[Attribution]
     preprocessing_flags: list[str] = Field(default_factory=list)
-    preprocessing_provenance: dict[str, str | float | int | bool | list] = Field(default_factory=dict)
+    preprocessing_provenance: dict[str, Any] = Field(default_factory=dict)
 
 
 class LinguisticOutput(BaseModel):
@@ -110,8 +110,8 @@ class ClaimItem(BaseModel):
     support: Literal["supported", "unsupported", "contested", "unverifiable"]
     reasons: list[str] = Field(default_factory=list)
     pointers: Pointer = Field(default_factory=Pointer)
-    citations: list[dict[str, str | float | int | bool]] = Field(default_factory=list)
-    query_trace: list[dict[str, str | float | int | bool]] = Field(default_factory=list)
+    citations: list[dict[str, Any]] = Field(default_factory=list)
+    query_trace: list[dict[str, Any]] = Field(default_factory=list)
     quality_flags: list[str] = Field(default_factory=list)
     uncertainty_flags: list[str] = Field(default_factory=list)
 

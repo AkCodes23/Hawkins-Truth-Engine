@@ -108,7 +108,7 @@ This implementation plan expands the Hawkins Truth Engine with three core archit
     - Implement graph metrics calculation (centrality, density)
     - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 8.6_
 
-  - [~] 6.2 Add graph export functionality
+  - [ ] 6.2 Add graph export functionality
     - Implement export methods for JSON, GraphML, and DOT formats
     - Add subgraph extraction based on node/edge filters
     - Implement graph traversal methods for relationship exploration
@@ -119,24 +119,24 @@ This implementation plan expands the Hawkins Truth Engine with three core archit
     - **Validates: Requirements 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7**
 
 - [ ] 7. Integrate graph components with existing modules
-  - [~] 7.1 Modify claims.py for graph integration
+  - [ ] 7.1 Modify claims.py for graph integration
     - Add automatic Claim_Graph population when claims are extracted
     - Ensure ClaimItem compatibility is maintained
     - Add graph data to ClaimsOutput schema
     - _Requirements: 4.1, 2.7_
 
-  - [~] 7.2 Modify source_intel.py for graph integration
+  - [ ] 7.2 Modify source_intel.py for graph integration
     - Add automatic source node creation when sources are identified
     - Integrate with existing source trust scoring
     - _Requirements: 4.2_
 
-  - [~] 7.3 Modify reasoning.py for graph and calibration integration
+  - [ ] 7.3 Modify reasoning.py for graph and calibration integration
     - Add Evidence_Graph updates during evidence processing
     - Integrate confidence calibration with existing heuristic confidence
     - Update AggregationOutput schema with graph and calibration data
     - _Requirements: 4.3, 5.4_
 
-  - [~] 7.4 Modify explain.py for graph insights
+  - [ ] 7.4 Modify explain.py for graph insights
     - Add graph-based insights to explanation generation
     - Include relationship information in evidence bullets
     - _Requirements: 4.4_
@@ -153,13 +153,13 @@ This implementation plan expands the Hawkins Truth Engine with three core archit
   - Ensure all integration tests pass, ask the user if questions arise.
 
 - [ ] 9. Add API endpoints and response extensions
-  - [~] 9.1 Extend existing API responses
+  - [ ] 9.1 Extend existing API responses
     - Add optional graph data to AnalysisResponse schema
     - Ensure existing API response formats are maintained
     - Add configuration options to enable/disable graph features
     - _Requirements: 4.5, 9.5_
 
-  - [~] 9.2 Create new graph-specific API endpoints
+  - [ ] 9.2 Create new graph-specific API endpoints
     - Add /graphs endpoint for retrieving graph data
     - Add /calibration endpoint for calibration model management
     - Implement proper error handling and validation
@@ -171,13 +171,13 @@ This implementation plan expands the Hawkins Truth Engine with three core archit
     - Test error handling and validation
 
 - [ ] 10. Implement performance optimizations and error handling
-  - [~] 10.1 Add performance optimizations
+  - [ ] 10.1 Add performance optimizations
     - Implement graph construction time limits and memory constraints
     - Add query caching for frequently accessed graph operations
     - Add progress indicators for long-running operations
     - _Requirements: 9.4, 7.7_
 
-  - [~] 10.2 Implement comprehensive error handling
+  - [ ] 10.2 Implement comprehensive error handling
     - Add graceful degradation when graph construction fails
     - Implement fallback behavior for corrupted calibration models
     - Add timeout handling for graph queries with partial results
@@ -193,13 +193,13 @@ This implementation plan expands the Hawkins Truth Engine with three core archit
     - **Validates: Requirements 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7**
 
 - [ ] 11. Final integration and validation
-  - [~] 11.1 Perform end-to-end testing
+  - [ ] 11.1 Perform end-to-end testing
     - Test complete pipeline with graph features enabled
     - Test pipeline with graph features disabled for performance comparison
     - Validate memory usage and performance benchmarks
     - _Requirements: 9.1, 9.2, 9.6_
 
-  - [~] 11.2 Update configuration and documentation
+  - [ ] 11.2 Update configuration and documentation
     - Add environment variables for graph and calibration configuration
     - Update API documentation with new endpoints and response formats
     - Add usage examples for graph functionality

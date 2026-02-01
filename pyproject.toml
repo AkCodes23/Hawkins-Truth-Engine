@@ -44,3 +44,8 @@ packages = ["hawkins_truth_engine", "hawkins_truth_engine.analyzers", "hawkins_t
 [build-system]
 requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]
